@@ -1,6 +1,7 @@
 [user]
 	email = dan.mccrady@focisolutions.com
 	name = Dan McCrady
+
 [diff]
 	external = difft
 	tool = difftastic
@@ -10,6 +11,9 @@
 
 [difftool "difftastic"]
     cmd = difft "$LOCAL" "$REMOTE"
+
+[pull]
+    rebase = false
 
 # Use a pager for large output, just like other git commands.
 [pager]
