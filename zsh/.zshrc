@@ -8,13 +8,29 @@ if [[ -r "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh" ]]
   source "${XDG_CACHE_HOME:-$HOME/.cache}/p10k-instant-prompt-${(%):-%n}.zsh"
 fi
 
-# history
-HISTFILE=~/.zsh_history
+# history https://www.soberkoder.com/better-zsh-history/
+export HISTFILE=~/.zsh_history
+export HISTFILESIZE=1000000000
+export HISTSIZE=1000000000
+setopt INC_APPEND_HISTORY
+export HISTTIMEFORMAT="[%F %T] "
+setopt EXTENDED_HISTORY
+setopt HIST_FIND_NO_DUPS
+setopt HIST_IGNORE_ALL_DUPS
 
 # source
+autoload -U +X bashcompinit && bashcompinit
+autoload -Uz compinit
+compinit
+
 plug "$HOME/.config/zsh/kubectl_aliases.sh"
 plug "$HOME/.config/zsh/aliases.sh"
 [ -f ~/.fzf.zsh ] && source ~/.fzf.zsh
+
+source /home/linuxbrew/.linuxbrew/etc/bash_completion.d/az
+
+#custom functions
+source "$HOME/.config/zsh/functions.zsh"
 
 #plugins
 plug "romkatv/powerlevel10k"
@@ -24,6 +40,13 @@ plug "zap-zsh/fzf"
 plug "wfxr/forgit"
 plug "ddnexus/fm"
 plug "Aloxaf/fzf-tab"
+plug "zsh-users/zsh-syntax-highlighting"
+plug "jirutka/zsh-shift-select"
+
+#keybinds
+
+bindkey "^[[1;5C" forward-word
+bindkey "^[[1;5D" backward-word
 
 #nvm
 export NVM_DIR="$HOME/.nvm"
@@ -37,6 +60,7 @@ then
 fi
 
 export PATH="$PATH:$FORGIT_INSTALL_DIR/bin"
+export PATH="${PATH}:${HOME}/.krew/bin"
 
 # To customize prompt, run `p10k configure` or edit ~/.p10k.zsh.
 [[ ! -f ~/.p10k.zsh ]] || source ~/.p10k.zsh
