@@ -13,7 +13,7 @@
     cmd = difft "$LOCAL" "$REMOTE"
 
 [pull]
-    rebase = false
+	rebase = merges
 
 # Use a pager for large output, just like other git commands.
 [pager]
@@ -53,3 +53,10 @@
 	old = red bold
 	new = green bold
 	whitespace = red reverse
+[core]
+	autocrlf = false
+	editor = code --wait
+[rerere]
+	enabled = true
+[init]
+	defaultBranch = main

@@ -10,13 +10,14 @@ fi
 
 # history https://www.soberkoder.com/better-zsh-history/
 export HISTFILE=~/.zsh_history
-export HISTFILESIZE=1000000000
 export HISTSIZE=1000000000
-setopt INC_APPEND_HISTORY
+export SAVEHIST=1000000000
 export HISTTIMEFORMAT="[%F %T] "
+setopt appendhistory
+setopt INC_APPEND_HISTORY  
+setopt SHARE_HISTORY
 setopt EXTENDED_HISTORY
-setopt HIST_FIND_NO_DUPS
-setopt HIST_IGNORE_ALL_DUPS
+
 
 # source
 autoload -U +X bashcompinit && bashcompinit
@@ -31,6 +32,9 @@ source /home/linuxbrew/.linuxbrew/etc/bash_completion.d/az
 
 #custom functions
 source "$HOME/.config/zsh/functions.zsh"
+source "$HOME/.config/zsh/functions.timetask.zsh"
+source "$HOME/.config/zsh/functions.metrics.zsh"
+
 
 #plugins
 plug "romkatv/powerlevel10k"

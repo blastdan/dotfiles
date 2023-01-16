@@ -1,0 +1,1 @@
+noter() { vim + "$(date +"%y-%m-%d %H:%M" | while read d t ; do f=$HOME/Dev/notes/pad/$d ; ( echo; echo $t ; echo ) >> "$f" ; echo "$f"; done; )" ; }
