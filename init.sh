@@ -37,7 +37,7 @@ function install_core() {
     sudo apt update
 
     # Install required dependencies
-    sudo apt install build-essential git curl file procps
+    sudo apt install build-essential git curl file procps libstdc++6
 }
 
 install_core

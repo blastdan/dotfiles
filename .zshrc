@@ -56,10 +56,14 @@ zinit light-mode for \
 ### Zinit Loading
 
 # Global
+zinit light zsh-users/zsh-completions
 zinit light Aloxaf/fzf-tab
 
 # UI enhancements
 zinit light zdharma-continuum/fast-syntax-highlighting
+
+# Programming
+zinit light darvid/zsh-poetry
 
 ##$ End Zinit Loading
 
@@ -79,4 +83,4 @@ eval "$(starship init zsh)"
 source <(fzf --zsh)
 
 # Set up zoxide
-eval "$(zoxide init zsh)"
+eval "$(zoxide init zsh)"export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
