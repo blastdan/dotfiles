@@ -1,0 +1,9 @@
+[credential "https://github.com"]
+    helper =
+    helper = !/home/daniel/dotfiles/.devbox/nix/profile/default/bin/gh auth git-credential
+[credential "https://gist.github.com"]
+    helper =
+    helper = !/home/daniel/dotfiles/.devbox/nix/profile/default/bin/gh auth git-credential
+[user]
+    name = Dan McCrady
+    email = dan.mccrady@focisolutions.com

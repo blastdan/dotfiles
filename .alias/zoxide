@@ -1,0 +1,3 @@
+echo "Loading zoxide aliases"
+
+alias cd='z'

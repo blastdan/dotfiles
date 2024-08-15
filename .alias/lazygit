@@ -1,0 +1,3 @@
+echo "Loading lazygit aliases"
+
+alias lz='lazygit'

@@ -1,0 +1,11 @@
+.git
+.gitignore
+.devbox
+.envrc
+devbox.json
+devbox.lock
+init.sh
+init_wsl.sh
+install.sh
+README.md
+sync.sh

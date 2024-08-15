@@ -1,0 +1,15 @@
+# Automatically load all alias files from the .alias folder
+
+autoload_aliases() {
+  alias_dir="$HOME/.alias"
+  
+  # Check if the alias directory exists
+  if [[ -d "$alias_dir" ]]; then
+    for aliasfile in "$alias_dir"/*; do
+      # Check if it's a regular file before sourcing
+      if [[ -f "$aliasfile" ]]; then
+        source "$aliasfile"
+      fi
+    done
+  fi
+}
