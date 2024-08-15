@@ -1,0 +1,24 @@
+# Function to set or display the current AWS CLI profile with fzf integration
+aws_profile() {
+  if [[ -z "$1" ]]; then
+    if [[ -z "$AWS_PROFILE" ]]; then
+      echo "No AWS profile is currently set."
+    else
+      echo "The current AWS profile is: '$AWS_PROFILE'"
+    fi
+
+    echo "Select an AWS profile:"
+    selected_profile=$(aws configure list-profiles | fzf --prompt="Select AWS profile: ")
+
+    if [[ -n "$selected_profile" ]]; then
+      export AWS_PROFILE="$selected_profile"
+      echo "AWS profile set to '$AWS_PROFILE'"
+    else
+      echo "No profile selected."
+    fi
+    return 0
+  fi
+
+  export AWS_PROFILE="$1"
+  echo "AWS profile set to '$AWS_PROFILE'"
+}
