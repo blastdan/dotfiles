@@ -17,7 +17,6 @@ format = 'underwent [$duration](bold yellow)'
 disabled = true
 
 [azure]
-format = 'on [$symbol($subscription)]($style) '
 disabled = true
 
 [gcloud]
@@ -38,7 +37,7 @@ ahead = '🏎💨'
 behind = '😰'
 diverged = '😵'
 up_to_date = ''
-untracked = '🤷'
+untracked = '〰️'
 stashed = ''
 modified = '📝'
 staged = '[++\($count\)](green)'
