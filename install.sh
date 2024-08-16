@@ -85,6 +85,14 @@ else
     echo "Figlet is already installed."
 fi
 
+# Figlet (text rendering)
+if ! command_exists toilet; then
+    echo "toilet not found. Installing toilet..."
+    brew install toilet
+else
+    echo "toilet is already installed."
+fi
+
 # Lazygit (simple terminal UI for git commands)
 if ! command_exists lazygit; then
     echo "Lazygit not found. Installing Lazygit..."

@@ -67,8 +67,12 @@ zinit light darvid/zsh-poetry
 
 ##$ End Zinit Loading
 
-# WSL
-export BROWSER=wslview
+# Check if wslview is installed
+if command -v wslview >/dev/null 2>&1; then
+  # WSL: set the browser to wslview
+  export BROWSER=wslview
+fi
+
 
 # Devbox
 if [ -e /home/daniel/.nix-profile/etc/profile.d/nix.sh ]; then . /home/daniel/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
@@ -84,3 +88,23 @@ source <(fzf --zsh)
 
 # Set up zoxide
 eval "$(zoxide init zsh)"export PATH="/home/linuxbrew/.linuxbrew/bin:$PATH"
+
+# Setup ZelliJ
+if [[ -z "$ZELLIJ" ]]; then
+    if [[ "$ZELLIJ_AUTO_ATTACH" == "true" ]]; then
+        zellij attach -c
+    else
+        zellij
+    fi
+
+    if [[ "$ZELLIJ_AUTO_EXIT" == "true" ]]; then
+        exit
+    fi
+fi
+
+
+if command -v toilet >/dev/null 2>&1; then
+  fonts=$(figlet -I 2)
+  # WSL: set the browser to wslview
+  toilet -f "smslant" -d $fonts -F gay -F border -t "Player 1 - Get Ready *"
+fi
