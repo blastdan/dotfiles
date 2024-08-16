@@ -1,5 +1,4 @@
 # Automatically load all alias files from the .alias folder
-
 autoload_aliases() {
   alias_dir="$HOME/.alias"
   
