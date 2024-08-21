@@ -1,0 +1,117 @@
+{
+  "lockfile_version": "1",
+  "packages": {
+    "awscli2@latest": {
+      "last_modified": "2024-08-16T08:27:12Z",
+      "resolved": "github:NixOS/nixpkgs/733f5a9806175f86380b14529cb29e953690c148#awscli2",
+      "source": "devbox-search",
+      "version": "2.17.18",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/vblq855q85l647f1i1hr2lnw5yc2h9ik-awscli2-2.17.18",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/60jvn84viz2k31x5s5qllh7mn7znk88w-awscli2-2.17.18-dist"
+            }
+          ],
+          "store_path": "/nix/store/vblq855q85l647f1i1hr2lnw5yc2h9ik-awscli2-2.17.18"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/5aaqkbpizj1bz44azwz17gs81i21m03w-awscli2-2.17.18",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/nsky9zmz7agvkscmlsn9mfd7lwklkqrp-awscli2-2.17.18-dist"
+            }
+          ],
+          "store_path": "/nix/store/5aaqkbpizj1bz44azwz17gs81i21m03w-awscli2-2.17.18"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/mhkdrmh6hiyq9gpmpkh5nyh025mhzqxw-awscli2-2.17.18",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/qm49210lb2fin0v7n762dripsqgh6zd1-awscli2-2.17.18-dist"
+            }
+          ],
+          "store_path": "/nix/store/mhkdrmh6hiyq9gpmpkh5nyh025mhzqxw-awscli2-2.17.18"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/m71lv1hw85szzzwagg9ikmyzxzvq2izq-awscli2-2.17.18",
+              "default": true
+            },
+            {
+              "name": "dist",
+              "path": "/nix/store/j2fvv0isg21jjg6019n8f8sn6jjg534j-awscli2-2.17.18-dist"
+            }
+          ],
+          "store_path": "/nix/store/m71lv1hw85szzzwagg9ikmyzxzvq2izq-awscli2-2.17.18"
+        }
+      }
+    },
+    "gh@latest": {
+      "last_modified": "2024-08-14T11:41:26Z",
+      "resolved": "github:NixOS/nixpkgs/0cb2fd7c59fed0cd82ef858cbcbdb552b9a33465#gh",
+      "source": "devbox-search",
+      "version": "2.54.0",
+      "systems": {
+        "aarch64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/wmkd0pp6fnkfqjk64rsz5518a2ybcdsn-gh-2.54.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/wmkd0pp6fnkfqjk64rsz5518a2ybcdsn-gh-2.54.0"
+        },
+        "aarch64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/g729a6rh5zw3jci1wdfsb8g28wpf38s6-gh-2.54.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/g729a6rh5zw3jci1wdfsb8g28wpf38s6-gh-2.54.0"
+        },
+        "x86_64-darwin": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/hal6zqxr7whsp66wcmvhjj4kqi8sw2dv-gh-2.54.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/hal6zqxr7whsp66wcmvhjj4kqi8sw2dv-gh-2.54.0"
+        },
+        "x86_64-linux": {
+          "outputs": [
+            {
+              "name": "out",
+              "path": "/nix/store/3l3v80r6my8f21w15mi8anw5w8g725q9-gh-2.54.0",
+              "default": true
+            }
+          ],
+          "store_path": "/nix/store/3l3v80r6my8f21w15mi8anw5w8g725q9-gh-2.54.0"
+        }
+      }
+    }
+  }
+}

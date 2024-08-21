@@ -64,6 +64,7 @@ zinit light zdharma-continuum/fast-syntax-highlighting
 
 # Programming
 zinit light darvid/zsh-poetry
+zinit light memark/zsh-dotnet-completion
 
 ##$ End Zinit Loading
 
@@ -76,6 +77,7 @@ fi
 
 # Devbox
 if [ -e /home/daniel/.nix-profile/etc/profile.d/nix.sh ]; then . /home/daniel/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
+eval "$(devbox global shellenv --init-hook)"
 
 # Direnv
 eval "$(direnv hook zsh)"
