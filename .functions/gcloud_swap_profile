@@ -1,0 +1,13 @@
+gcloud_swap_profile() {
+  # List all gcloud profiles and use FZF to select one
+  selected_profile=$(gcloud config configurations list --format="value(name)" | fzf --height 20%)
+
+  # If a profile is selected
+  if [[ -n $selected_profile ]]; then
+    # Activate the selected profile
+    gcloud config configurations activate $selected_profile
+    echo "Switched to GCloud profile '$selected_profile'."
+  else
+    echo "No profile selected. Profile switching canceled."
+  fi
+}

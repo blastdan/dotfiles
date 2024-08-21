@@ -1,0 +1,21 @@
+gcloud_generate_profile() {
+  # List all gcloud projects and use FZF to select one
+  selected_project=$(gcloud projects list --format="value(projectId)" | fzf --height 20%)
+
+  # If a project is selected
+  if [[ -n $selected_project ]]; then
+    # Ask for the profile name
+    echo -n "Enter the profile name for $selected_project: "
+    read profile_name
+
+    # Create the new profile
+    gcloud config configurations create $profile_name
+
+    # Set the project for the new profile
+    gcloud config set project $selected_project --configuration=$profile_name
+
+    echo "GCloud profile '$profile_name' created and configured for project '$selected_project'."
+  else
+    echo "No project selected. Profile generation canceled."
+  fi
+}
