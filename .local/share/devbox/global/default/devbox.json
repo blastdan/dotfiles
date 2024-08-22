@@ -3,7 +3,8 @@
   "packages": [
     "gh@latest",
     "awscli2@latest",
-    "path:gcloud#google-cloud-sdk"
+    "path:gcloud#google-cloud-sdk",
+    "k9s@latest"
   ],
   "shell": {
     "init_hook": [
