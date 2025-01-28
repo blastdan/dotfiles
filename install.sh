@@ -109,6 +109,14 @@ else
     echo "Lazygit is already installed."
 fi
 
+# gh-cli
+if ! command_exists gh; then
+    echo "GitHug cli not found. Installing gh..."
+    brew install gh
+else
+    echo "GitHub Cli is already installed."
+fi
+
 # direnv
 if ! command_exists direnv; then
     echo "direnv not found. Installing direnv..."
@@ -123,12 +131,4 @@ if ! command_exists nvim; then
     brew install NVim
 else
     echo "NVim is already installed."
-fi
-
-# gcloud (for google cloud sdk)
-if ! command_exists gcloud; then
-    echo "gcloud not found. Installing gcloud..."
-    brew install google-cloud-sdk
-else
-    echo "gcloud is already installed."
 fi
