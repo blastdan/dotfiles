@@ -131,4 +131,4 @@ if ! command_exists nvim; then
     brew install NVim
 else
     echo "NVim is already installed."
-fi
+fi  
