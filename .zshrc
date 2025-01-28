@@ -74,11 +74,6 @@ if command -v wslview >/dev/null 2>&1; then
   export BROWSER=wslview
 fi
 
-
-# Devbox
-if [ -e /home/daniel/.nix-profile/etc/profile.d/nix.sh ]; then . /home/daniel/.nix-profile/etc/profile.d/nix.sh; fi # added by Nix installer
-eval "$(devbox global shellenv --init-hook)"
-
 # Direnv
 eval "$(direnv hook zsh)"
 

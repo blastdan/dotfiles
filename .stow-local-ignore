@@ -6,6 +6,7 @@ devbox.json
 devbox.lock
 init.sh
 init_wsl.sh
+init_*
 install.sh
 README.md
 sync.sh

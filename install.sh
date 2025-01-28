@@ -61,6 +61,14 @@ else
     echo "Zoxide is already installed."
 fi
 
+# Gum
+if ! command_exists gum; then
+    echo "Gum not found. Installing Gum..."
+    brew install gum
+else
+    echo "Gum is already installed."
+fi
+
 # Bat (a cat clone with syntax highlighting)
 if ! command_exists bat; then
     echo "Bat not found. Installing Bat..."
@@ -99,14 +107,6 @@ if ! command_exists lazygit; then
     brew install lazygit
 else
     echo "Lazygit is already installed."
-fi
-
-# Devbox (for managing development environments)
-if ! command_exists devbox; then
-    echo "Devbox not found. Installing Devbox..."
-    curl -fsSL https://get.jetify.com/devbox | bash
-else
-    echo "Devbox is already installed."
 fi
 
 # direnv
