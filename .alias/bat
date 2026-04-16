@@ -1,1 +1,5 @@
-alias cat="bat"
+# bat — guard against agent tool-calling conflicts
+# OpenCode uses non-interactive shells, but guard anyway for safety
+if [[ -o interactive ]]; then
+  alias cat='bat'
+fi

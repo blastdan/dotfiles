@@ -1,4 +1,0 @@
-# Hello World!
-function hello_world() {
-  figlet "Hello World!"
-}

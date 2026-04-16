@@ -1,0 +1,132 @@
+{
+    "$schema": "https://opencode.ai/config.json",
+    "autoupdate": "notify",
+    "share": "manual",
+    "snapshot": true,
+    "default_agent": "build",
+    "watcher": {
+        "ignore": [
+            "node_modules/**",
+            "dist/**",
+            "build/**",
+            ".next/**",
+            ".git/**"
+        ]
+    },
+    "agent": {
+        "build": {
+            "mode": "primary",
+            "description": "Default coding agent with full tool access."
+        },
+        "plan": {
+            "mode": "primary",
+            "description": "Planning-only agent that asks before edits or shell commands.",
+            "permission": {
+                "edit": "ask",
+                "bash": {
+                    "*": "ask"
+                }
+            }
+        },
+        "general": {
+            "mode": "subagent",
+            "description": "General-purpose subagent for broad research and multi-step work."
+        },
+        "explore": {
+            "mode": "subagent",
+            "description": "Read-only subagent for fast codebase exploration.",
+            "permission": {
+                "edit": "deny",
+                "bash": "deny"
+            }
+        },
+        "dotfiles": {
+            "mode": "primary",
+            "description": "Dotfiles specialist. Edits shell config, aliases, functions, tmux, nvim, and tool configs in ~/.dotfiles. Always guards interactive-only aliases with [[ -o interactive ]]. Never puts secrets in files tracked by git. Catppuccin Macchiato theme everywhere.",
+            "permission": {
+                "edit": "allow",
+                "bash": {
+                    "rm -rf *": "deny",
+                    "git push*": "ask",
+                    "*": "allow"
+                }
+            }
+        }
+    },
+    "permission": {
+        "edit": "allow",
+        "bash": {
+            "rm -rf *": "deny",
+            "git push*": "ask",
+            "git reset --hard*": "deny",
+            "*": "allow"
+        }
+    },
+    "command": {
+        "plan-approve": {
+            "description": "Draft a plan and request approval",
+            "agent": "plan",
+            "template": "Create a concrete implementation plan for: $ARGUMENTS. Keep it concise, list assumptions, and stop before any code changes. Ask for explicit approval with the exact word APPROVE before proceeding."
+        },
+        "review-diff": {
+            "description": "Review current changes for risk",
+            "agent": "build",
+            "template": "Review the current git diff in this repo. Focus on bugs, regressions, security, missing tests, and rollout risk. Return findings first, ordered by severity, then open questions."
+        },
+        "commit-message": {
+            "description": "Generate commit message options",
+            "agent": "build",
+            "template": "Analyze the current git changes and produce 3 Conventional Commits only using type(scope): subject (or type!: subject for breaking changes). Include a brief body and explicit BREAKING CHANGE note when applicable."
+        },
+        "workspace-setup": {
+            "description": "Scaffold a new project workspace with tmux layout and tooling",
+            "agent": "dotfiles",
+            "template": "Set up a workspace for: $ARGUMENTS. Use agent-workspace or review-workspace tmux layout functions as appropriate. Create a mise.toml if needed with correct runtimes for the project type. Suggest any missing tools from the standard stack (uv, mise, ripgrep, fd, etc.)."
+        }
+    },
+    "plugin": [
+        "@plannotator/opencode@latest"
+    ],
+    "mcp": {
+        "github": {
+            "type": "local",
+            "command": [
+                "npx",
+                "-y",
+                "@modelcontextprotocol/server-github"
+            ],
+            "environment": {
+                "GITHUB_PERSONAL_ACCESS_TOKEN": "{env:GITHUB_PAT}"
+            },
+            "enabled": true,
+            "timeout": 15000
+        },
+        "serena": {
+            "type": "local",
+            "command": [
+                "uvx",
+                "-p",
+                "3.13",
+                "--from",
+                "git+https://github.com/oraios/serena",
+                "serena",
+                "start-mcp-server",
+                "--context",
+                "ide",
+                "--project",
+                "."
+            ],
+            "enabled": true
+        },
+        "playwright": {
+            "type": "local",
+            "command": [
+                "npx",
+                "-y",
+                "@playwright/mcp@latest"
+            ],
+            "enabled": true,
+            "timeout": 30000
+        }
+    }
+}

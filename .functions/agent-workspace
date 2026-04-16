@@ -1,0 +1,28 @@
+#!/bin/zsh
+# agent-workspace: neovim (left 60%) | opencode (top-right) | shell (bottom-right)
+# Usage: agent-workspace [session-name] [path]
+
+session="${1:-agent}"
+path="${2:-$PWD}"
+
+if tmux has-session -t "$session" 2>/dev/null; then
+  tmux switch-client -t "$session"
+  exit 0
+fi
+
+tmux new-session -ds "$session" -c "$path"
+
+# Main pane: neovim
+tmux send-keys -t "$session" "nvim" Enter
+
+# Split right 40% for opencode
+tmux split-window -t "$session" -h -p 40 -c "$path"
+tmux send-keys -t "$session" "opencode" Enter
+
+# Split that pane vertically for shell
+tmux split-window -t "$session" -v -p 40 -c "$path"
+
+# Focus back to neovim (pane 1)
+tmux select-pane -t "$session:.1"
+
+tmux switch-client -t "$session"

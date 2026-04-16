@@ -1,21 +1,43 @@
 gcloud_generate_profile() {
-  # List all gcloud projects and use FZF to select one
-  selected_project=$(gcloud projects list --format="value(projectId)" | fzf --height 20%)
+  # Select a GCP project with fzf
+  local selected_project
+  selected_project=$(gcloud projects list --format="value(projectId)" | fzf --height 40% --prompt="Select project: ")
 
-  # If a project is selected
-  if [[ -n $selected_project ]]; then
-    # Ask for the profile name
-    echo -n "Enter the profile name for $selected_project: "
-    read profile_name
-
-    # Create the new profile
-    gcloud config configurations create $profile_name
-
-    # Set the project for the new profile
-    gcloud config set project $selected_project --configuration=$profile_name
-
-    echo "GCloud profile '$profile_name' created and configured for project '$selected_project'."
-  else
-    echo "No project selected. Profile generation canceled."
+  if [[ -z "$selected_project" ]]; then
+    echo "No project selected. Canceled." >&2
+    return 1
   fi
+
+  # Select an account with fzf
+  local selected_account
+  selected_account=$(gcloud auth list --format="value(account)" | fzf --height 40% --prompt="Select account: ")
+
+  if [[ -z "$selected_account" ]]; then
+    echo "No account selected. Canceled." >&2
+    return 1
+  fi
+
+  # Select a default region with fzf
+  local selected_region
+  selected_region=$(gcloud compute regions list --format="value(name)" | fzf --height 40% --prompt="Select default region: ")
+
+  # Prompt for profile name
+  local profile_name
+  echo -n "Enter profile name for '$selected_project': "
+  read -r profile_name
+
+  if [[ -z "$profile_name" ]]; then
+    echo "No profile name entered. Canceled." >&2
+    return 1
+  fi
+
+  # Create and configure the profile
+  gcloud config configurations create "$profile_name"
+  gcloud config set project "$selected_project" --configuration="$profile_name"
+  gcloud config set account "$selected_account" --configuration="$profile_name"
+  if [[ -n "$selected_region" ]]; then
+    gcloud config set compute/region "$selected_region" --configuration="$profile_name"
+  fi
+
+  echo "Profile '$profile_name' created: project=$selected_project, account=$selected_account${selected_region:+, region=$selected_region}"
 }

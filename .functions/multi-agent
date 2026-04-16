@@ -1,0 +1,26 @@
+#!/bin/zsh
+# multi-agent: 4-pane grid for running parallel opencode agents
+# Usage: multi-agent [session-name] [path]
+
+session="${1:-multi}"
+path="${2:-$PWD}"
+
+if tmux has-session -t "$session" 2>/dev/null; then
+  tmux switch-client -t "$session"
+  exit 0
+fi
+
+tmux new-session -ds "$session" -c "$path"
+
+# Create 4-pane grid: top-left | top-right / bottom-left | bottom-right
+tmux split-window -t "$session" -h -c "$path"      # split right
+tmux split-window -t "$session:.1" -v -c "$path"   # split top-left down
+tmux split-window -t "$session:.2" -v -c "$path"   # split top-right down
+
+# Start opencode in all 4 panes
+tmux send-keys -t "$session:.1" "opencode" Enter
+tmux send-keys -t "$session:.2" "opencode" Enter
+tmux send-keys -t "$session:.3" "opencode" Enter
+tmux send-keys -t "$session:.4" "opencode" Enter
+
+tmux switch-client -t "$session"

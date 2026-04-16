@@ -10,3 +10,5 @@ init_*
 install.sh
 README.md
 sync.sh
+.config/mise/secrets.sh.example
+.wslconfig

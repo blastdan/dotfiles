@@ -1,0 +1,33 @@
+#!/bin/zsh
+# tmux-sessionizer: fzf project picker → named tmux session
+# Usage: tmux-sessionizer [path]
+# Bind: Ctrl-a T
+
+SEARCH_DIRS=(
+  "$HOME/source/repos"
+  "$HOME/source"
+  "$HOME"
+)
+
+if [[ $# -eq 1 ]]; then
+  selected="$1"
+else
+  selected=$(find "${SEARCH_DIRS[@]}" -mindepth 1 -maxdepth 2 -type d 2>/dev/null \
+    | fzf --prompt="  Project: " \
+          --preview='eza --tree --level=2 --color=always --icons {} 2>/dev/null || ls -la {}' \
+          --preview-window=right:45%)
+fi
+
+[[ -z "$selected" ]] && exit 0
+
+session_name=$(basename "$selected" | tr ' .:' '___')
+
+if ! tmux has-session -t "$session_name" 2>/dev/null; then
+  tmux new-session -ds "$session_name" -c "$selected"
+fi
+
+if [[ -n "$TMUX" ]]; then
+  tmux switch-client -t "$session_name"
+else
+  tmux attach-session -t "$session_name"
+fi

@@ -1,0 +1,75 @@
+# git shortcuts
+alias gs='git status'
+alias gd='git diff'
+alias gds='git diff --staged'
+alias gl='git log --oneline --graph --decorate -20'
+alias gla='git log --oneline --graph --decorate --all'
+alias gco='git checkout'
+alias gcb='git checkout -b'
+alias gp='git push'
+alias gpf='git push --force-with-lease'
+alias gpl='git pull'
+alias gf='git fetch --all --prune'
+alias ga='git add'
+alias gaa='git add -A'
+alias gc='git commit'
+alias gcm='git commit -m'
+alias gca='git commit --amend'
+alias grb='git rebase'
+alias grbi='git rebase -i'
+alias gst='git stash'
+alias gstp='git stash pop'
+
+# ── fzf-powered git functions ─────────────────────────────────────────────────
+
+# gcof: interactive branch checkout — shows log preview for each branch
+gcof() {
+  local branch
+  branch=$(git branch --all --sort=-committerdate \
+    | grep -v 'HEAD\|^$' \
+    | sed 's|remotes/origin/||' \
+    | sort -u \
+    | fzf \
+        --prompt='  branch: ' \
+        --preview='git log --oneline --graph --color=always --decorate -20 $(echo {} | sed "s/^[* ]*//" | sed "s/ .*//")' \
+        --preview-window=right:55% \
+  ) && git checkout "$(echo "$branch" | sed 's/^[* ]*//' | sed 's/ .*//')"
+}
+
+# gadd: interactive git add — shows diff for each file while staging
+gadd() {
+  local files
+  files=$(git diff --name-only HEAD 2>/dev/null; git ls-files --others --exclude-standard) \
+    | sort -u \
+    | fzf \
+        --multi \
+        --prompt='  stage: ' \
+        --preview='git diff --color=always HEAD -- {} 2>/dev/null || bat --color=always {}' \
+        --preview-window=right:60% \
+        --bind='tab:toggle'
+  [[ -n "$files" ]] && echo "$files" | xargs git add && git status --short
+}
+
+# gshow: browse git log and show full diff for each commit
+gshow() {
+  git log --oneline --graph --color=always --decorate "$@" \
+    | fzf \
+        --ansi \
+        --no-sort \
+        --prompt='  commit: ' \
+        --preview='git show --color=always --stat $(echo {} | grep -oP "[a-f0-9]{6,}" | head -1)' \
+        --preview-window=right:60% \
+        --bind='enter:execute(git show --color=always $(echo {} | grep -oP "[a-f0-9]{6,}" | head -1) | bat --color=always --style=plain | less -R)'
+}
+
+# gstashf: interactive stash browser — preview diff, enter to apply
+gstashf() {
+  local stash
+  stash=$(git stash list \
+    | fzf \
+        --prompt='  stash: ' \
+        --preview='git stash show -p --color=always $(echo {} | cut -d: -f1)' \
+        --preview-window=right:60% \
+  ) && git stash apply "$(echo "$stash" | cut -d: -f1)"
+}
+

@@ -1,0 +1,10 @@
+# uv — Python environment management (replaces poetry)
+alias uvr='uv run'
+alias uvs='uv sync'
+alias uva='uv add'
+alias uvad='uv add --dev'
+alias uvrm='uv remove'
+alias uvl='uv lock'
+alias uvx='uvx'                  # run tool without installing
+alias venv='uv venv'
+alias pip='uv pip'               # use uv's pip interface

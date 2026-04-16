@@ -1,3 +1,59 @@
 .devbox
 
+# GitHub CLI credentials
 .config/gh/hosts.yml
+
+# gcloud credentials, tokens, logs
+.config/gcloud/access_tokens.db
+.config/gcloud/credentials.db
+.config/gcloud/default_configs.db
+.config/gcloud/legacy_credentials/
+.config/gcloud/logs/
+.config/gcloud/application_default_credentials.json
+.config/gcloud/config_sentinel
+.config/gcloud/.last_survey_prompt.yaml
+.config/gcloud/gce
+
+# Browser data (should never be in dotfiles)
+# .config/google-chrome/ covered in junk section below
+
+# PulseAudio
+.config/pulse/
+
+# JetBrains telemetry/IDs
+.config/JetBrains/
+
+# Go telemetry
+# .config/go/ covered in junk section below
+
+# NPM/configstore update notifiers
+.config/configstore/
+
+# mise secrets (local-only)
+.config/mise/secrets.sh
+.secrets.local
+
+# Zellij (removed)
+.config/zellij/
+
+# Starship (removed)
+.config/starship.toml
+
+# NvChad (replaced by kickstart.nvim — will be re-added)
+# .config/nvim/
+
+# Junk / auto-generated app configs (not useful in dotfiles)
+.config/QtProject/
+.config/QtProject.conf
+.config/create-next-app-nodejs/
+.config/nextjs-nodejs/
+.config/gcloud/
+.config/google-chrome-for-testing/
+.config/google-chrome/
+.config/kaggle/
+.config/matplotlib/
+.config/procps/
+.config/wslu/
+.config/go/
+.config/jgit/
+.config/Code/

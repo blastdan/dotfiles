@@ -1,0 +1,8 @@
+# dev helpers
+alias nv='nvim'
+alias oc='opencode'
+alias serve='python3 -m http.server'
+alias json='jq .'
+alias uuid="python3 -c \"import uuid; print(uuid.uuid4())\""
+alias myip='curl -s https://ipinfo.io/ip'
+alias weather='curl -s wttr.in'

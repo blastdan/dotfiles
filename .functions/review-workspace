@@ -1,0 +1,25 @@
+#!/bin/zsh
+# review-workspace: lazygit (left 60%) | opencode (right 40%)
+# Usage: review-workspace [session-name] [path]
+
+session="${1:-review}"
+path="${2:-$PWD}"
+
+if tmux has-session -t "$session" 2>/dev/null; then
+  tmux switch-client -t "$session"
+  exit 0
+fi
+
+tmux new-session -ds "$session" -c "$path"
+
+# Main pane: lazygit
+tmux send-keys -t "$session" "lazygit" Enter
+
+# Split right 40% for opencode
+tmux split-window -t "$session" -h -p 40 -c "$path"
+tmux send-keys -t "$session" "opencode" Enter
+
+# Focus lazygit
+tmux select-pane -t "$session:.1"
+
+tmux switch-client -t "$session"

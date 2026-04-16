@@ -1,0 +1,10 @@
+# Global mise configuration
+# Manages runtimes, environment variables, and secrets
+
+[tools]
+python = "3.13"
+node = "22"
+
+[env]
+# Source secrets from a gitignored script (gcloud secrets + local fallback)
+_.source = "~/.config/mise/secrets.sh"

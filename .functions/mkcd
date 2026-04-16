@@ -1,0 +1,8 @@
+# Create a directory and immediately cd into it
+mkcd() {
+  if [[ -z "$1" ]]; then
+    echo "Usage: mkcd <directory>" >&2
+    return 1
+  fi
+  mkdir -p "$1" && cd "$1"
+}

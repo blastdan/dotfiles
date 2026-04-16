@@ -1,0 +1,23 @@
+#!/bin/zsh
+# fkill: interactively pick and kill a process with fzf
+# Usage: fkill [signal]   e.g. fkill 9
+
+fkill() {
+  local signal="${1:--15}"  # default SIGTERM
+  local pid
+
+  pid=$(ps -eo pid,ppid,user,%cpu,%mem,stat,comm --no-headers \
+    | fzf \
+        --multi \
+        --prompt='  kill: ' \
+        --header='PID   PPID  USER     %CPU %MEM STAT COMMAND' \
+        --preview='ps -p $(echo {} | awk "{print \$1}") -o pid,ppid,user,lstart,%cpu,%mem,cmd --no-headers 2>/dev/null' \
+        --preview-window=down:3:wrap \
+    | awk '{print $1}'
+  )
+
+  if [[ -n "$pid" ]]; then
+    echo "$pid" | xargs kill "-$signal"
+    echo "Sent signal $signal to: $pid"
+  fi
+}

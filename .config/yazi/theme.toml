@@ -1,0 +1,93 @@
+[manager]
+# Catppuccin Macchiato palette
+cwd = { fg = "#8aadf4" }
+
+hovered         = { fg = "#24273a", bg = "#8aadf4" }
+preview_hovered = { underline = true }
+
+find_keyword  = { fg = "#eed49f", italic = true }
+find_position = { fg = "#f5a97f", bg = "reset", italic = true }
+
+marker_copied   = { fg = "#a6da95", bg = "#a6da95" }
+marker_cut      = { fg = "#ed8796", bg = "#ed8796" }
+marker_marked   = { fg = "#c6a0f6", bg = "#c6a0f6" }
+marker_selected = { fg = "#8aadf4", bg = "#8aadf4" }
+
+tab_active   = { fg = "#24273a", bg = "#8aadf4" }
+tab_inactive = { fg = "#cad3f5", bg = "#363a4f" }
+tab_width    = 1
+
+border_symbol = "│"
+border_style  = { fg = "#494d64" }
+
+[status]
+separator_open  = ""
+separator_close = ""
+separator_style = { fg = "#363a4f", bg = "#363a4f" }
+
+mode_normal = { fg = "#24273a", bg = "#8bd5ca", bold = true }
+mode_select = { fg = "#24273a", bg = "#a6da95", bold = true }
+mode_unset  = { fg = "#24273a", bg = "#eed49f", bold = true }
+
+progress_label  = { fg = "#ffffff", bold = true }
+progress_normal = { fg = "#8aadf4", bg = "#363a4f" }
+progress_error  = { fg = "#ed8796", bg = "#363a4f" }
+
+permissions_t = { fg = "#8aadf4" }
+permissions_r = { fg = "#eed49f" }
+permissions_w = { fg = "#ed8796" }
+permissions_x = { fg = "#a6da95" }
+permissions_s = { fg = "#494d64" }
+
+[input]
+border   = { fg = "#8aadf4" }
+title    = {}
+value    = {}
+selected = { reversed = true }
+
+[select]
+border   = { fg = "#8aadf4" }
+active   = { fg = "#c6a0f6" }
+inactive = {}
+
+[tasks]
+border  = { fg = "#8aadf4" }
+title   = {}
+hovered = { underline = true }
+
+[which]
+mask            = { bg = "#1e2030" }
+cand            = { fg = "#8bd5ca" }
+rest            = { fg = "#6e738d" }
+desc            = { fg = "#c6a0f6" }
+separator       = "  "
+separator_style = { fg = "#494d64" }
+
+[help]
+on      = { fg = "#c6a0f6" }
+exec    = { fg = "#8bd5ca" }
+desc    = { fg = "#6e738d" }
+hovered = { bg = "#363a4f", bold = true }
+footer  = { fg = "#24273a", bg = "#8aadf4" }
+
+[filetype]
+rules = [
+  { mime = "image/*",  fg = "#a6da95" },
+  { mime = "video/*",  fg = "#eed49f" },
+  { mime = "audio/*",  fg = "#f5a97f" },
+  { mime = "application/zip",    fg = "#c6a0f6" },
+  { mime = "application/x-tar",  fg = "#c6a0f6" },
+  { mime = "application/x-gzip", fg = "#c6a0f6" },
+  { mime = "text/*",   fg = "#cad3f5" },
+  { name = "*.lua",    fg = "#8aadf4" },
+  { name = "*.py",     fg = "#eed49f" },
+  { name = "*.ts",     fg = "#8aadf4" },
+  { name = "*.tsx",    fg = "#8aadf4" },
+  { name = "*.js",     fg = "#eed49f" },
+  { name = "*.json",   fg = "#a6da95" },
+  { name = "*.md",     fg = "#cad3f5" },
+  { name = "*.toml",   fg = "#f5a97f" },
+  { name = "*.yaml",   fg = "#f5a97f" },
+  { name = "*.yml",    fg = "#f5a97f" },
+  { name = "*",        fg = "#cad3f5" },
+]

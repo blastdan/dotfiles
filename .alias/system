@@ -1,0 +1,11 @@
+# system utilities
+alias reload='source ~/.zshrc'
+alias path='echo $PATH | tr ":" "\n"'
+alias ports='ss -tulnp'
+alias df='df -h'
+alias free='free -h'
+alias top='htop 2>/dev/null || top'
+alias mkdir='mkdir -p'
+alias cp='cp -iv'
+alias mv='mv -iv'
+alias rm='rm -iv'
