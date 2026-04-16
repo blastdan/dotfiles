@@ -72,7 +72,11 @@ setopt RM_STAR_WAIT              # Pause 10s before executing rm *
 # ============================================================
 # SHELL PLUGINS — sheldon
 # ============================================================
-eval "$(sheldon source)"
+if command -v sheldon >/dev/null 2>&1; then
+  eval "$(sheldon source)"
+else
+  echo "[dotfiles] sheldon not installed — run: bash ~/.dotfiles/install.sh" >&2
+fi
 
 # compinit after plugins so sheldon-provided completions are included.
 # Cache the dumpfile and only re-scan fpath once per day.
@@ -92,22 +96,34 @@ unset _aliasfile
 # ============================================================
 # RUNTIMES & SECRETS — mise
 # ============================================================
-eval "$(mise activate zsh)"
+if command -v mise >/dev/null 2>&1; then
+  eval "$(mise activate zsh)"
+else
+  echo "[dotfiles] mise not installed — run: bash ~/.dotfiles/install.sh" >&2
+fi
 
 # ============================================================
 # PROMPT — Oh My Posh (Catppuccin Macchiato)
 # ============================================================
-eval "$(oh-my-posh init zsh --config '$HOME/.config/oh-my-posh/config.omp.json')"
+if command -v oh-my-posh >/dev/null 2>&1; then
+  eval "$(oh-my-posh init zsh --config '$HOME/.config/oh-my-posh/config.omp.json')"
+else
+  echo "[dotfiles] oh-my-posh not installed — run: bash ~/.dotfiles/install.sh" >&2
+fi
 
 # ============================================================
 # TOOLS
 # ============================================================
 
 # fzf
-source <(fzf --zsh)
+if command -v fzf >/dev/null 2>&1; then
+  source <(fzf --zsh)
+fi
 
 # zoxide (smarter cd — must come after compinit)
-eval "$(zoxide init zsh)"
+if command -v zoxide >/dev/null 2>&1; then
+  eval "$(zoxide init zsh)"
+fi
 
 # ============================================================
 # WSL
@@ -127,5 +143,7 @@ fi
 # WELCOME BANNER
 # ============================================================
 if command -v toilet >/dev/null 2>&1; then
-  toilet -f "smslant" -F gay -F border -t "Player 1 - Get Ready *"
+  # Point toilet at figlet's font dir so smslant is found
+  export TOILET_FONT_PATH="/home/linuxbrew/.linuxbrew/share/figlet"
+  toilet -f smslant -F gay -F border -t "Player 1 - Get Ready *"
 fi
