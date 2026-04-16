@@ -6,5 +6,5 @@ python = "3.13"
 node = "22"
 
 [env]
-# Source secrets from a gitignored script (gcloud secrets + local fallback)
-_.source = "~/.config/mise/secrets.sh"
+# No _.source here — secrets.sh is sourced once directly in .zshrc
+# to avoid mise re-running it on every prompt (would cause ~1s lag per command)

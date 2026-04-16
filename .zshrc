@@ -97,7 +97,14 @@ unset _aliasfile
 # RUNTIMES & SECRETS — mise
 # ============================================================
 if command -v mise >/dev/null 2>&1; then
-  eval "$(mise activate zsh)"
+  # Use shims mode instead of hook mode — hook mode runs mise hook-env as a
+  # subprocess on every prompt (~1s lag). Shims mode is zero-cost: mise-managed
+  # tools (python, node, etc.) are accessed via ~/.local/share/mise/shims on PATH.
+  # Trade-off: no automatic per-directory env switching, which we don't need since
+  # runtimes are set globally in config.toml.
+  export PATH="$HOME/.local/share/mise/shims:$PATH"
+  # Source secrets once at shell start
+  [[ -f "$HOME/.config/mise/secrets.sh" ]] && source "$HOME/.config/mise/secrets.sh"
 else
   echo "[dotfiles] mise not installed — run: bash ~/.dotfiles/install.sh" >&2
 fi
@@ -106,7 +113,7 @@ fi
 # PROMPT — Oh My Posh (Catppuccin Macchiato)
 # ============================================================
 if command -v oh-my-posh >/dev/null 2>&1; then
-  eval "$(oh-my-posh init zsh --config '$HOME/.config/oh-my-posh/config.omp.json')"
+  eval "$(oh-my-posh init zsh --config "$HOME/.config/oh-my-posh/config.omp.json")"
 else
   echo "[dotfiles] oh-my-posh not installed — run: bash ~/.dotfiles/install.sh" >&2
 fi
@@ -143,7 +150,7 @@ fi
 # WELCOME BANNER
 # ============================================================
 if command -v toilet >/dev/null 2>&1; then
-  # Point toilet at figlet's font dir so smslant is found
-  export TOILET_FONT_PATH="/home/linuxbrew/.linuxbrew/share/figlet"
+  # smslant lives inside figlet's fonts/ subdirectory
+  export TOILET_FONT_PATH="/home/linuxbrew/.linuxbrew/share/figlet/fonts"
   toilet -f smslant -F gay -F border -t "Player 1 - Get Ready *"
 fi
