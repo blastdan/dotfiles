@@ -14,17 +14,11 @@
 .config/gcloud/.last_survey_prompt.yaml
 .config/gcloud/gce
 
-# Browser data (should never be in dotfiles)
-# .config/google-chrome/ covered in junk section below
-
 # PulseAudio
 .config/pulse/
 
 # JetBrains telemetry/IDs
 .config/JetBrains/
-
-# Go telemetry
-# .config/go/ covered in junk section below
 
 # NPM/configstore update notifiers
 .config/configstore/
@@ -33,14 +27,8 @@
 .config/mise/secrets.sh
 .secrets.local
 
-# Zellij (removed)
-.config/zellij/
-
-# Starship (removed)
-.config/starship.toml
-
-# NvChad (replaced by kickstart.nvim — will be re-added)
-# .config/nvim/
+# Tmux plugins (managed by tpm, not committed)
+.config/tmux/plugins/
 
 # Junk / auto-generated app configs (not useful in dotfiles)
 .config/QtProject/
