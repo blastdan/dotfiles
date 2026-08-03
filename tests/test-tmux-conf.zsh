@@ -62,4 +62,42 @@ assert_ok "cheatsheet documents prefix+Q for the killer" -- \
 assert_ok "cheatsheet documents prefix+W for watch" -- \
   grep -qE 'Ctrl-a W' "$cheat"
 
+# Every `display-popup -E` / `run-shell` target that invokes a file under
+# .functions must (a) be executable and (b) run standalone under a stripped
+# environment (no .zshrc, no PATH additions, TMUX carried through) without
+# "command not found" on stderr. This is the bug class Critical 2 hit twice:
+# a script-mode invocation depending on a helper function that is only
+# autoloaded in an interactive shell. Targets are parsed out of tmux.conf,
+# not hardcoded, so a future bind is covered automatically.
+#
+# Note: only single-line binds are parsed (every current .functions target
+# is single-line); a target split across a line continuation would not be
+# picked up here.
+targets=()
+while IFS= read -r line; do
+  quoted=$(print -r -- "$line" | grep -oE '"[^"]*"' | head -1)
+  quoted="${quoted#\"}"; quoted="${quoted%\"}"
+  first_word="${quoted%% *}"
+  case "$first_word" in
+    '$HOME/.functions/'*)
+      targets+=("${first_word/\$HOME/$HOME}")
+      ;;
+  esac
+done < <(grep -nE 'display-popup -E|run-shell' "$conf")
+
+targets=(${(u)targets[@]})
+[[ ${#targets[@]} -eq 0 ]] && _fail "found at least one .functions target bound in tmux.conf" "none parsed"
+
+for target in "${targets[@]}"; do
+  assert_ok "$target:t is executable" -- test -x "$target"
+
+  stderr_out=$(timeout 5 env -i HOME="$HOME" PATH="$PATH" TMUX="$TMUX" \
+    zsh -c "$target" </dev/null 2>&1 >/dev/null)
+  if print -r -- "$stderr_out" | grep -qi 'command not found'; then
+    _fail "$target:t runs standalone with no 'command not found'" "stderr: $stderr_out"
+  else
+    _pass "$target:t runs standalone with no 'command not found'"
+  fi
+done
+
 test_summary
