@@ -45,7 +45,18 @@ case "$sub" in
     local lines=100 all=false
     while (( $# )); do
       case "$1" in
-        --lines) shift; lines="${1:-100}" ;;
+        --lines)
+          shift
+          if [[ -z "${1:-}" ]]; then
+            print -u2 -- "tpane read: --lines requires a value"
+            return 1
+          fi
+          if [[ ! "$1" == <-> || "$1" -le 0 ]]; then
+            print -u2 -- "tpane read: --lines must be a positive integer, got '$1'"
+            return 1
+          fi
+          lines="$1"
+          ;;
         --all)   all=true ;;
         *)       print -u2 -- "tpane read: unknown option '$1'"; return 1 ;;
       esac
@@ -56,7 +67,22 @@ case "$sub" in
       tmux capture-pane -p -t "$id" -S - \
         | awk 'BEGIN{blank=0} {if($0==""){blank++} else {for(;blank>0;blank--) print ""; print}}'
     else
-      tmux capture-pane -p -t "$id" -S - \
+      # Bound the capture to roughly `lines` lines instead of scanning the
+      # full scrollback. tmux's line numbering for -S/-E is relative to the
+      # top of the *visible* page (0), not the cursor, so "-S --K" with the
+      # default end (bottom of the visible page) yields exactly K+pane_height
+      # lines. Solve for K so that K+pane_height == lines; when lines already
+      # fits within the visible page (K<=0), just capture the visible page
+      # and trim it, no history read needed at all.
+      local height k
+      height=$(tmux display-message -p -t "$id" '#{pane_height}' 2>/dev/null)
+      [[ -z "$height" ]] && height=0
+      k=$(( lines - height ))
+      if (( k > 0 )); then
+        tmux capture-pane -p -t "$id" -S "-$k"
+      else
+        tmux capture-pane -p -t "$id"
+      fi \
         | awk 'BEGIN{blank=0} {if($0==""){blank++} else {for(;blank>0;blank--) print ""; print}}' \
         | tail -n "$lines"
     fi
