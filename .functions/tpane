@@ -20,18 +20,9 @@
 local sub="${1:-}"
 [[ -n "$sub" ]] && shift
 
-# Resolve a target to exactly one pane id, or fail.
-_tpane_resolve() {
-  local t="$1" id
-  [[ -z "$t" ]] && { print -u2 -- "tpane: missing <target>"; return 1 }
-  id=$(tmux display-message -p -t "$t" '#{pane_id}' 2>/dev/null)
-  if [[ -z "$id" ]]; then
-    print -u2 -- "tpane: no such pane: $t  (run 'tpane list')"
-    return 1
-  fi
-  print -r -- "$id"
-}
-
+# Resolve a target to exactly one pane id, or fail. Inlined (not a nested
+# function) so tpane never leaves a helper function behind in the caller's
+# shell namespace after it returns — the same defect class fixed in Task 6.
 case "$sub" in
   list)
     tmux list-panes -a -F \
@@ -62,7 +53,15 @@ case "$sub" in
       esac
       shift 2>/dev/null || break
     done
-    local id; id=$(_tpane_resolve "$target") || return 1
+    if [[ -z "$target" ]]; then
+      print -u2 -- "tpane: missing <target>"
+      return 1
+    fi
+    local id; id=$(tmux display-message -p -t "$target" '#{pane_id}' 2>/dev/null)
+    if [[ -z "$id" ]]; then
+      print -u2 -- "tpane: no such pane: $target  (run 'tpane list')"
+      return 1
+    fi
     if $all; then
       tmux capture-pane -p -t "$id" -S - \
         | awk 'BEGIN{blank=0} {if($0==""){blank++} else {for(;blank>0;blank--) print ""; print}}'
@@ -97,7 +96,15 @@ case "$sub" in
       print -u2 -- "tpane write: missing <text>"
       return 1
     fi
-    local id; id=$(_tpane_resolve "$target") || return 1
+    if [[ -z "$target" ]]; then
+      print -u2 -- "tpane: missing <target>"
+      return 1
+    fi
+    local id; id=$(tmux display-message -p -t "$target" '#{pane_id}' 2>/dev/null)
+    if [[ -z "$id" ]]; then
+      print -u2 -- "tpane: no such pane: $target  (run 'tpane list')"
+      return 1
+    fi
     if [[ -n "$TMUX_PANE" && "$id" == "$TMUX_PANE" ]]; then
       print -u2 -- "tpane: refusing to write to the calling pane ($id)"
       return 1
@@ -113,7 +120,15 @@ case "$sub" in
       print -u2 -- "tpane key: usage: tpane key <target> <key>"
       return 1
     fi
-    local id; id=$(_tpane_resolve "$target") || return 1
+    if [[ -z "$target" ]]; then
+      print -u2 -- "tpane: missing <target>"
+      return 1
+    fi
+    local id; id=$(tmux display-message -p -t "$target" '#{pane_id}' 2>/dev/null)
+    if [[ -z "$id" ]]; then
+      print -u2 -- "tpane: no such pane: $target  (run 'tpane list')"
+      return 1
+    fi
     if [[ -n "$TMUX_PANE" && "$id" == "$TMUX_PANE" ]]; then
       print -u2 -- "tpane: refusing to send keys to the calling pane ($id)"
       return 1
