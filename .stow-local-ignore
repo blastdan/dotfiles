@@ -8,3 +8,4 @@ sync.sh
 .aws
 .superpowers
 tests
+tmux-client-.*\.log

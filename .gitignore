@@ -30,6 +30,25 @@
 # Tmux plugins (managed by tpm, not committed)
 .config/tmux/plugins/
 
+# Python bytecode from stowed hook.py
+.config/claude-dashboard/__pycache__/
+.config/claude-dashboard/*.pyc
+
+# Claude Code / OpenCode agent instruction files (loaded from cwd, not versioned)
+CLAUDE.md
+AGENTS.md
+
+# OpenCode runtime state
+.config/opencode/opencode-notifier-state.json
+.config/opencode/package-lock.json
+.config/opencode/package.json
+.config/opencode/node_modules/
+
+# Serena runtime cache and local state
+.serena/cache/
+.serena/memories/
+.serena/project.local.yml
+
 # Junk / auto-generated app configs (not useful in dotfiles)
 .config/QtProject/
 .config/QtProject.conf
@@ -45,3 +64,9 @@
 .config/go/
 .config/jgit/
 .config/Code/
+
+# SDD scratch workspace (subagent-driven-development)
+.superpowers/
+
+# Stray tmux client logs left by verification work
+tmux-client-*.log
