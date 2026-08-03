@@ -1,3 +1,5 @@
+#!/bin/zsh
+# gcloud_generate_profile: interactively create a new gcloud CLI configuration via fzf
 gcloud_generate_profile() {
   # Select a GCP project with fzf
   local selected_project
@@ -41,3 +43,6 @@ gcloud_generate_profile() {
 
   echo "Profile '$profile_name' created: project=$selected_project, account=$selected_account${selected_region:+, region=$selected_region}"
 }
+
+# Autoload delegation — run the real implementation on first call
+gcloud_generate_profile "$@"

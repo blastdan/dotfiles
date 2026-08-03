@@ -1,4 +1,5 @@
-# Function to set or display the current AWS CLI profile with fzf integration
+#!/bin/zsh
+# aws_profile: set or display the current AWS CLI profile with fzf integration
 aws_profile() {
   if [[ -z "$1" ]]; then
     if [[ -z "$AWS_PROFILE" ]]; then
@@ -22,3 +23,6 @@ aws_profile() {
   export AWS_PROFILE="$1"
   echo "AWS profile set to '$AWS_PROFILE'"
 }
+
+# Autoload delegation — run the real implementation on first call
+aws_profile "$@"

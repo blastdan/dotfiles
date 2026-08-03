@@ -1,0 +1,154 @@
+#!/bin/zsh
+# gwt-clone: bare-clone a GitHub repo and create its initial worktree
+# ──────────────────────────────────────────────────────────────────────────────
+# gwt-clone — bare-clone a GitHub repo into the worktree workflow layout
+#
+# Clones a repo as a *bare* repository (git data only, no working tree) into
+#   ~/source/repos/<org>/<repo>/
+# then immediately creates an initial worktree for the default branch at
+#   ~/source/repos/<org>/<repo>/<default-branch>/
+#
+# WHY BARE?
+#   A bare clone stores only the git objects and refs — there is no working
+#   tree of its own. Each branch you want to work on lives as a separate
+#   worktree directory alongside the bare repo root. This lets you have
+#   main/, feat/login/, and fix/bug/ all checked out simultaneously with no
+#   stashing or branch switching required.
+#
+# USAGE
+#   gwt-clone <url>           org inferred from the GitHub URL
+#   gwt-clone <url> <org>     explicit org / owner name
+#
+# ARGUMENTS
+#   <url>    required — HTTPS or SSH GitHub URL
+#              https://github.com/Org/repo.git
+#              git@github.com:Org/repo.git
+#              Trailing .git is optional.
+#   <org>    optional — GitHub org or username. Inferred from the URL if
+#              it matches the github.com pattern; otherwise you are prompted.
+#
+# RESULT
+#   ~/source/repos/<org>/<repo>/                  ← bare repo (git data)
+#   ~/source/repos/<org>/<repo>/<default-branch>/ ← initial checked-out worktree
+#
+# FETCH CONFIG
+#   Bare clones don't configure fetch refspecs by default. gwt-clone sets
+#     remote.origin.fetch = +refs/heads/*:refs/remotes/origin/*
+#   so that  git fetch  inside any worktree updates all remote-tracking refs.
+#
+# ALIASES
+#   gwtc     — shorthand for gwt-clone
+#
+# EXAMPLES
+#   gwtc https://github.com/acme/api.git
+#   gwtc git@github.com:acme/api.git  acme
+#
+# NEXT STEPS (after cloning)
+#   cd ~/source/repos/<org>/<repo>/<default-branch>
+#   gwta <branch>              switch to an existing remote branch as a worktree
+#   gwta <branch> --new        create a new branch and worktree
+#   gwtl                       list all worktrees
+#
+# RELATED
+#   gwt-init   — initialise a brand-new (empty) repo with the same layout
+#   gwt-add    — add a worktree for a branch inside an existing bare repo
+# ──────────────────────────────────────────────────────────────────────────────
+
+setopt LOCAL_OPTIONS PIPE_FAIL NOUNSET  # scoped to this function only
+
+# ── help ──────────────────────────────────────────────────────────────────────
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+gwt-clone — bare-clone a GitHub repo into the worktree workflow layout
+
+USAGE
+  gwt-clone <url>           org inferred from GitHub URL
+  gwt-clone <url> <org>     explicit org / owner name
+  gwt-clone --help          show this help
+
+ARGUMENTS
+  <url>   HTTPS or SSH GitHub URL (trailing .git optional)
+            https://github.com/Org/repo.git
+            git@github.com:Org/repo.git
+  <org>   optional — inferred from URL or prompted if ambiguous
+
+RESULT
+  ~/source/repos/<org>/<repo>/                   bare repo
+  ~/source/repos/<org>/<repo>/<default-branch>/  initial worktree
+
+WHY BARE?
+  Bare clones have no working tree of their own. Each branch lives as a
+  separate worktree directory, so you can have main/, feat/login/, and
+  fix/bug/ all checked out simultaneously — no stashing required.
+
+ALIASES
+  gwtc
+
+EXAMPLES
+  gwtc https://github.com/acme/api.git
+  gwtc git@github.com:acme/api.git acme
+
+NEXT STEPS
+  cd ~/source/repos/<org>/<repo>/<default-branch>
+  gwta <branch>             checkout an existing remote branch as a worktree
+  gwta <branch> --new       create a new branch + worktree
+
+RELATED
+  gwti   init a new repo     gwta   add a worktree
+EOF
+  return 0
+fi
+
+url="${1:?Usage: gwt-clone <url> [org]}"
+
+# ── derive repo name from URL ──────────────────────────────────────────────────
+# handles: https://github.com/Org/repo.git  git@github.com:Org/repo.git  .git optional
+repo_name=$(basename "$url" .git)
+
+# ── derive org ─────────────────────────────────────────────────────────────────
+if [[ -n "${2:-}" ]]; then
+  org="$2"
+elif [[ "$url" =~ github\.com[:/]([^/]+)/ ]]; then
+  org="${match[1]}"
+else
+  # fallback: prompt
+  print -n "GitHub org / owner name: "
+  read org
+fi
+
+# ── destination ────────────────────────────────────────────────────────────────
+dest="$HOME/source/repos/$org/$repo_name"
+
+if [[ -e "$dest" ]]; then
+  echo "gwt-clone: destination already exists: $dest" >&2
+  return 1
+fi
+
+mkdir -p "$(dirname "$dest")"
+
+echo "  Cloning $url"
+echo "  → $dest (bare)"
+echo ""
+
+git clone --bare "$url" "$dest"
+
+# ── configure fetch so 'git fetch' updates remote-tracking refs in a bare repo ─
+# By default bare clones don't set up fetch refspecs for remote branches.
+git -C "$dest" config remote.origin.fetch '+refs/heads/*:refs/remotes/origin/*'
+git -C "$dest" fetch --quiet
+
+# ── create the initial worktree for the default branch ─────────────────────────
+default_branch=$(git -C "$dest" symbolic-ref --short HEAD 2>/dev/null || echo "main")
+
+echo "  Creating worktree: $dest/$default_branch"
+git -C "$dest" worktree add "$dest/$default_branch" "$default_branch"
+
+echo ""
+echo "  Done. Structure:"
+echo "    $dest/                ← bare repo"
+echo "    $dest/$default_branch/        ← $default_branch worktree"
+echo ""
+echo "  Next steps:"
+echo "    cd $dest/$default_branch"
+echo "    gwt-add <branch>      ← create a new worktree for a branch"
+echo "    gwtl                  ← list all worktrees"

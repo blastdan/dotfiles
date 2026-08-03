@@ -1,4 +1,5 @@
-# Create a directory and immediately cd into it
+#!/bin/zsh
+# mkcd: create a directory and immediately cd into it
 mkcd() {
   if [[ -z "$1" ]]; then
     echo "Usage: mkcd <directory>" >&2
@@ -6,3 +7,6 @@ mkcd() {
   fi
   mkdir -p "$1" && cd "$1"
 }
+
+# Autoload delegation — run the real implementation on first call
+mkcd "$@"

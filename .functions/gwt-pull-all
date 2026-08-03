@@ -1,0 +1,90 @@
+#!/bin/zsh
+# gwt-pull-all: fetch all remotes and fast-forward every local branch that is safely behind
+# ──────────────────────────────────────────────────────────────────────────────
+# gwt-pull-all — fetch all remotes and fast-forward every local branch
+#
+# Works from any worktree or the bare repo root. Fetches origin with --prune,
+# then attempts a fast-forward update on each local branch that is only behind
+# its upstream. Branches with local commits (ahead or diverged) are reported
+# but skipped safely.
+#
+# USAGE
+#   gwt-pull-all
+#   gwtp              (alias)
+#
+# BEHAVIOUR
+#   ↑  fast-forwarded   branch was behind-only; updated to match upstream
+#   =  up to date       no changes
+#   ~  skipped          has local commits (ahead or diverged) — update manually
+#   ✗  failed           fast-forward was unexpectedly refused
+#
+# RELATED
+#   gwt-add    — add a worktree for a branch
+#   gwt-clone  — bare-clone a repo ready for this workflow
+#   gwtl       — list all worktrees
+# ──────────────────────────────────────────────────────────────────────────────
+
+setopt LOCAL_OPTIONS PIPE_FAIL NOUNSET
+
+# ── help ──────────────────────────────────────────────────────────────────────
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+gwt-pull-all — fetch all remotes and fast-forward every local branch
+
+USAGE
+  gwt-pull-all
+  gwtp              (alias)
+
+BEHAVIOUR
+  ↑  fast-forwarded   branch was behind-only; updated to match upstream
+  =  up to date       no changes
+  ~  skipped          has local commits (ahead or diverged)
+  ✗  failed           fast-forward was unexpectedly refused
+
+RELATED
+  gwt-add    add a worktree     gwt-clone  clone a repo
+  gwtl       list worktrees     gwtrm      remove a worktree
+EOF
+  return 0
+fi
+
+# ── locate bare repo root ─────────────────────────────────────────────────────
+git_dir=$(git rev-parse --git-common-dir 2>/dev/null) \
+  || { echo "gwt-pull-all: not inside a git repo" >&2; return 1; }
+repo_root=$(realpath "$git_dir")
+
+# ── fetch ─────────────────────────────────────────────────────────────────────
+echo "  Fetching from origin..."
+git -C "$repo_root" fetch --all --prune
+echo ""
+
+# ── fast-forward each branch that is only behind ──────────────────────────────
+integer updated=0 skipped=0 current=0
+
+while IFS=' ' read -r branch upstream; do
+  [[ -z "$upstream" ]] && continue  # no upstream configured
+
+  # Count commits in each direction
+  ahead=$(git -C "$repo_root" rev-list --count "${upstream}..${branch}" 2>/dev/null || echo 0)
+  behind=$(git -C "$repo_root" rev-list --count "${branch}..${upstream}" 2>/dev/null || echo 0)
+
+  if (( ahead == 0 && behind == 0 )); then
+    printf "  = %s\n" "$branch"
+    (( current++ )) || true
+  elif (( ahead == 0 )); then
+    if git -C "$repo_root" fetch origin "${branch}:${branch}" 2>/dev/null; then
+      printf "  ↑ %s  (+%d)\n" "$branch" "$behind"
+      (( updated++ )) || true
+    else
+      printf "  ✗ %s  (fast-forward failed — may be checked out; run 'git pull' in that worktree)\n" "$branch" >&2
+      (( skipped++ )) || true
+    fi
+  else
+    printf "  ~ %s  (ahead %d, behind %d — skipped)\n" "$branch" "$ahead" "$behind"
+    (( skipped++ )) || true
+  fi
+done < <(git -C "$repo_root" for-each-ref \
+  --format='%(refname:short) %(upstream:short)' refs/heads/)
+
+echo ""
+echo "  Updated: $updated  Up to date: $current  Skipped: $skipped"

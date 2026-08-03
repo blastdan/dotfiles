@@ -1,0 +1,23 @@
+#!/bin/zsh
+# tokscale-monthly: show a monthly tokscale usage report
+tokscale-monthly() {
+  # Usage: tokscale-monthly [YYYY-MM]
+  #   No argument → last month
+  #   YYYY-MM     → that specific month
+  local year month since until
+
+  if [[ -n "${1:-}" ]]; then
+    year="${1%%-*}"
+    month="${1##*-}"
+  else
+    # Last month
+    year=$(date -d "$(date +%Y-%m-01) -1 month" +%Y)
+    month=$(date -d "$(date +%Y-%m-01) -1 month" +%m)
+  fi
+
+  since="${year}-${month}-01"
+  until=$(date -d "${since} +1 month -1 day" +%Y-%m-%d)
+
+  echo "Tokscale report: ${year}-${month}"
+  tokscale monthly --light --since "$since" --until "$until"
+}

@@ -1,0 +1,305 @@
+{
+  "env": {
+    "CLAUDE_CODE_NO_FLICKER": "1",
+    "PULSE_SERVER": "unix:/mnt/wslg/runtime-dir/pulse/native"
+  },
+  "permissions": {
+    "allow": [
+      "Edit",
+      "Write",
+      "Agent",
+      "Skill",
+      "Bash(tpane:*)"
+    ],
+    "autoAllow": [
+      "Glob",
+      "Grep",
+      "Read",
+      "Bash:git",
+      "Bash:test",
+      "Bash:find",
+      "Bash:grep",
+      "Bash:ls",
+      "Bash:node",
+      "Bash:npm",
+      "Bash:mise",
+      "Bash:brew"
+    ],
+    "prompt": [
+      "Bash:*",
+      "TaskStop"
+    ]
+  },
+  "model": "claude-fable-5[1m]",
+  "hooks": {
+    "Notification": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "wsl-notify-send.exe --category 'Claude Code' 'Needs your attention'"
+          }
+        ]
+      }
+    ],
+    "StopFailure": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "wsl-notify-send.exe --category 'Claude Code' 'Error — session stopped unexpectedly'"
+          }
+        ]
+      }
+    ],
+    "PermissionDenied": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo '[DENIED]' >> ~/.claude/denied-tools.log"
+          }
+        ]
+      }
+    ],
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "CMD=$(python3 -c \"import json,sys; d=json.load(sys.stdin); print(d.get('tool_input',d).get('command',''))\" 2>/dev/null || true); case \"$CMD\" in *grep*|*rg\\ *|*ripgrep*|*find\\ *|*fd\\ *|*ack\\ *|*ag\\ *)   [ -f graphify-out/graph.json ] &&   echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: knowledge graph at graphify-out/. For focused questions, run `graphify query \\\"<question>\\\"` (scoped subgraph, usually much smaller than GRAPH_REPORT.md) instead of grepping raw files. Read GRAPH_REPORT.md only for broad architecture context.\"}}'   || true ;; esac"
+          }
+        ]
+      },
+      {
+        "matcher": "Read|Glob",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "HIT=$(python3 -c \"import json,sys;d=json.load(sys.stdin);t=d.get('tool_input',d);s=(str(t.get('file_path') or '')+' '+str(t.get('pattern') or '')+' '+str(t.get('path') or '')).lower().replace(chr(92),'/');exts=('.py','.js','.ts','.tsx','.jsx','.go','.rs','.java','.rb','.c','.h','.cpp','.hpp','.cc','.cs','.kt','.swift','.php','.scala','.lua','.sh','.md','.rst','.txt','.mdx');sys.stdout.write('1' if 'graphify-out/' not in s and any(e in s for e in exts) else '')\" 2>/dev/null || true); if [ \"$HIT\" = 1 ] && [ -f graphify-out/graph.json ]; then echo '{\"hookSpecificOutput\":{\"hookEventName\":\"PreToolUse\",\"additionalContext\":\"graphify: knowledge graph at graphify-out/. For codebase questions, run `graphify query \\\"<question>\\\"` (scoped subgraph, usually much smaller than reading files one by one), `graphify explain \\\"<concept>\\\"`, or `graphify path \\\"<A>\\\" \\\"<B>\\\"`, instead of reading source files to answer. Read raw files to modify or debug specific code, or when the graph lacks the detail.\"}}'; fi || true"
+          }
+        ]
+      },
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.config/claude-dashboard/hook.py hook action 2>/dev/null || true"
+          }
+        ]
+      }
+    ],
+    "PermissionRequest": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.config/claude-dashboard/hook.py hook permission 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.config/claude-dashboard/hook.py hook post-tool 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.config/claude-dashboard/hook.py hook session-start 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "TaskCreated": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "STATUS=created python3 ~/.config/claude-dashboard/hook.py hook task 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "TaskCompleted": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "STATUS=completed python3 ~/.config/claude-dashboard/hook.py hook task 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStart": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "STATUS=start python3 ~/.config/claude-dashboard/hook.py hook subagent 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "STATUS=stop python3 ~/.config/claude-dashboard/hook.py hook subagent 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "STATUS=pre python3 ~/.config/claude-dashboard/hook.py hook compact 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "PostCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "STATUS=post python3 ~/.config/claude-dashboard/hook.py hook compact 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.config/claude-dashboard/hook.py hook session-end 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.config/claude-dashboard/hook.py hook stop 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 ~/.config/claude-dashboard/hook.py hook submit 2>/dev/null || true",
+            "async": true
+          }
+        ]
+      }
+    ]
+  },
+  "enabledPlugins": {
+    "superpowers@claude-plugins-official": true,
+    "plannotator@plannotator": true,
+    "mattpocock-skills@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "plannotator": {
+      "source": {
+        "source": "github",
+        "repo": "backnotprop/plannotator"
+      }
+    },
+    "unifi-plugins": {
+      "source": {
+        "source": "github",
+        "repo": "sirkirby/unifi-mcp"
+      }
+    }
+  },
+  "effortLevel": "medium",
+  "voice": {
+    "enabled": true,
+    "mode": "hold"
+  },
+  "skipWorkflowUsageWarning": true,
+  "theme": "custom:catppuccin-macchiato",
+  "skipAutoPermissionPrompt": true,
+  "voiceEnabled": true,
+  "autoModelSelection": {
+    "enabled": true,
+    "default": "sonnet",
+    "downgradeFor": [
+      "summary",
+      "documentation",
+      "config",
+      "simple",
+      "explain"
+    ],
+    "downgradeModel": "haiku",
+    "upgradeFor": [
+      "plan",
+      "architecture",
+      "strategy",
+      "longterm"
+    ],
+    "maxModel": "opus"
+  },
+  "showWelcome": false,
+  "codeEditor": "nvim",
+  "lineNumbers": true,
+  "wordWrap": true,
+  "fontSize": 12,
+  "notifications": {
+    "enabled": true,
+    "longTaskThreshold": 30000,
+    "onComplete": true,
+    "onDenial": true,
+    "onError": true
+  },
+  "features": {
+    "promptCache": true,
+    "extendedThinking": false
+  }
+}

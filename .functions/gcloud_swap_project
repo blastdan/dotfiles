@@ -1,0 +1,60 @@
+#!/bin/zsh
+# gcloud_swap_project: fzf-pick and activate a GCP project, optionally scoped to an org
+gcloud_swap_project() {
+  local current_project
+  current_project=$(gcloud config get-value project 2>/dev/null)
+
+  # Build project list — optionally scoped to active org
+  local filter_flag=()
+  if [[ -n "$GCP_ORG_ID" ]]; then
+    filter_flag=(--filter="parent.id=$GCP_ORG_ID")
+    echo "Listing projects for org: $GCP_ORG_ID" >&2
+  fi
+
+  # Fetch projects: projectId | displayName | lifecycleState
+  local project_list
+  project_list=$(
+    gcloud projects list "${filter_flag[@]}" \
+      --format="value(projectId,name,lifecycleState)" 2>/dev/null | \
+    awk '{printf "%-40s %-40s %-10s\n", $1, $2, $3}'
+  )
+
+  if [[ -z "$project_list" ]]; then
+    echo "No projects found." >&2
+    return 1
+  fi
+
+  # fzf with lazy API preview on hover
+  local selected_line
+  selected_line=$(
+    echo "$project_list" | \
+    fzf --height 60% \
+        --prompt="Select project: " \
+        --ansi \
+        --header="PROJECT_ID                               NAME                                     STATE" \
+        --preview='
+          project_id=$(echo {} | awk "{print \$1}")
+          echo "── Enabled APIs ──────────────────────────────────"
+          gcloud services list --enabled --project="$project_id" \
+            --format="value(config.name)" 2>/dev/null | \
+            sed "s/\.googleapis\.com//" | \
+            sort | \
+            column
+        ' \
+        --preview-window=right:45%:wrap
+  )
+
+  if [[ -z "$selected_line" ]]; then
+    echo "No project selected. Canceled." >&2
+    return 1
+  fi
+
+  local selected_project
+  selected_project=$(echo "$selected_line" | awk '{print $1}')
+
+  gcloud config set project "$selected_project"
+  echo "Switched to project '$selected_project' (was: ${current_project:-unset})"
+}
+
+# Autoload delegation — run the real implementation on first call
+gcloud_swap_project "$@"

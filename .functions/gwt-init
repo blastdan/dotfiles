@@ -1,0 +1,148 @@
+#!/bin/zsh
+# gwt-init: initialise a brand-new repo with the bare worktree layout
+# ──────────────────────────────────────────────────────────────────────────────
+# gwt-init — initialise a brand-new repo with the bare worktree layout
+#
+# Creates a fresh bare git repository at
+#   ~/source/repos/<org>/<name>/
+# adds an empty initial commit on main (using a temporary clone internally),
+# then creates the first worktree at
+#   ~/source/repos/<org>/<name>/main/
+#
+# The result is identical in structure to what gwt-clone produces, so you can
+# immediately start adding per-branch worktrees with gwt-add.
+#
+# WHY NOT JUST git init?
+#   Regular git init gives you one working tree tied to a single branch.
+#   gwt-init sets up the same bare-repo layout as gwt-clone, letting you keep
+#   multiple branches open in parallel without stashing or branch switching.
+#
+# USAGE
+#   gwt-init <name>           org inferred from existing ~/source/repos/ siblings
+#   gwt-init <name> <org>     explicit org / owner name
+#
+# ARGUMENTS
+#   <name>   required — repository name (used as the directory name)
+#   <org>    optional — GitHub org or username.
+#              Auto-detected from the first entry in ~/source/repos/ if it
+#              exists; otherwise you are prompted interactively.
+#
+# RESULT
+#   ~/source/repos/<org>/<name>/        ← bare repo (git data only)
+#   ~/source/repos/<org>/<name>/main/   ← initial main worktree
+#
+# ALIASES
+#   gwti     — shorthand for gwt-init
+#
+# EXAMPLES
+#   gwti my-new-project              org inferred from ~/source/repos/ siblings
+#   gwti my-new-project acme         explicit org name
+#
+# NEXT STEPS (after init)
+#   cd ~/source/repos/<org>/<name>/main
+#   gwta <branch> --new              create a feature branch worktree
+#   gwta <branch> --new --layout agent   worktree + agent coding layout
+#   gwtl                             list all worktrees
+#
+# RELATED
+#   gwt-clone  — same layout but cloned from an existing remote repo
+#   gwt-add    — add a worktree for a branch inside this repo
+# ──────────────────────────────────────────────────────────────────────────────
+
+setopt LOCAL_OPTIONS PIPE_FAIL NOUNSET  # scoped to this function only
+
+# ── help ──────────────────────────────────────────────────────────────────────
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+gwt-init — initialise a brand-new repo with the bare worktree layout
+
+USAGE
+  gwt-init <name>           org inferred from ~/source/repos/ siblings
+  gwt-init <name> <org>     explicit org / owner name
+  gwt-init --help           show this help
+
+ARGUMENTS
+  <name>  required — repository name (used as the directory name)
+  <org>   optional — auto-detected from ~/source/repos/ or prompted
+
+RESULT
+  ~/source/repos/<org>/<name>/        bare repo
+  ~/source/repos/<org>/<name>/main/   initial main worktree
+
+WHY NOT git init?
+  Sets up the same bare-repo structure as gwt-clone so you can keep
+  multiple branches open in parallel without stashing or switching.
+
+ALIASES
+  gwti
+
+EXAMPLES
+  gwti my-project               org inferred from ~/source/repos/ siblings
+  gwti my-project acme          explicit org name
+
+NEXT STEPS
+  cd ~/source/repos/<org>/<name>/main
+  gwta <branch> --new               create a feature branch worktree
+  gwta <branch> --new --layout agent  worktree + agent coding layout
+
+RELATED
+  gwtc   clone an existing repo     gwta   add a worktree
+EOF
+  return 0
+fi
+
+name="${1:?Usage: gwt-init <name> [org]}"
+
+# ── org: explicit arg → git config → folder basename → prompt ─────────────────
+if [[ -n "${2:-}" ]]; then
+  org="$2"
+else
+  # try to guess from existing sibling repos in ~/source/repos/
+  org=$(ls "$HOME/source/repos" 2>/dev/null | head -1 || true)
+  if [[ -z "$org" ]]; then
+    print -n "GitHub org / owner name: "
+    read -r org
+  fi
+fi
+
+# ── destination ────────────────────────────────────────────────────────────────
+dest="$HOME/source/repos/$org/$name"
+
+if [[ -e "$dest" ]]; then
+  echo "gwt-init: destination already exists: $dest" >&2
+  return 1
+fi
+
+mkdir -p "$dest"
+
+echo "  Initialising bare repo: $dest"
+echo ""
+
+# ── init bare repo ─────────────────────────────────────────────────────────────
+git init --bare --initial-branch=main "$dest"
+
+# Ensure the default branch is 'main'
+git -C "$dest" symbolic-ref HEAD refs/heads/main
+
+# ── create an initial empty commit so the branch actually exists ───────────────
+# A bare repo has no working tree, so we use a temporary clone trick.
+tmp=$(mktemp -d)
+git clone "$dest" "$tmp/worktree" --quiet
+git -C "$tmp/worktree" commit --allow-empty -m "chore: initial commit" --quiet
+git -C "$tmp/worktree" push origin main --quiet
+rm -rf "$tmp"
+
+# ── create the main worktree ───────────────────────────────────────────────────
+echo "  Creating worktree: $dest/main"
+git -C "$dest" worktree add "$dest/main" main
+
+echo ""
+echo "  Done. Structure:"
+echo "    $dest/        ← bare repo"
+echo "    $dest/main/   ← main worktree"
+echo ""
+echo "  Next steps:"
+echo "    cd $dest/main"
+echo "    gwta <branch> --new       ← create a feature worktree"
+echo "    gwta <branch> --new --agent  ← worktree + agent-workspace"
+echo "    gwtl                      ← list all worktrees"

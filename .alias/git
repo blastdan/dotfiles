@@ -20,6 +20,21 @@ alias grbi='git rebase -i'
 alias gst='git stash'
 alias gstp='git stash pop'
 
+# ── worktrees ─────────────────────────────────────────────────────────────────
+alias gwts='git worktree'                # raw git worktree subcommand
+alias gwtl='git worktree list'           # list all worktrees
+alias gwta='gwt-add'                     # add worktree (+ tmux only with --session/--layout)
+alias gwtc='gwt-clone'                   # bare-clone a repo ready for worktrees
+alias gwti='gwt-init'                    # init a new repo with bare worktree layout
+alias gwtf='gwt'                         # fzf worktree picker (autoloaded function)
+alias gwtp='gwt-pull-all'                # fetch all + fast-forward every branch
+alias gwtrm='git worktree remove'        # remove a worktree directory
+alias gwtrmf='git worktree remove --force' # force-remove (unclean worktree)
+alias gwtpr='git worktree prune'         # prune stale worktree metadata
+
+# ── project commands (proj-*) ──────────────────────────────────────────────────
+alias gpn='proj-new'                     # interactive project init (clone or new)
+
 # ── fzf-powered git functions ─────────────────────────────────────────────────
 
 # gcof: interactive branch checkout — shows log preview for each branch
@@ -39,14 +54,14 @@ gcof() {
 # gadd: interactive git add — shows diff for each file while staging
 gadd() {
   local files
-  files=$(git diff --name-only HEAD 2>/dev/null; git ls-files --others --exclude-standard) \
+  files=$( (git diff --name-only HEAD 2>/dev/null; git ls-files --others --exclude-standard) \
     | sort -u \
     | fzf \
         --multi \
         --prompt='  stage: ' \
         --preview='git diff --color=always HEAD -- {} 2>/dev/null || bat --color=always {}' \
         --preview-window=right:60% \
-        --bind='tab:toggle'
+        --bind='tab:toggle')
   [[ -n "$files" ]] && echo "$files" | xargs git add && git status --short
 }
 

@@ -1,13 +1,22 @@
+#!/bin/zsh
+# gcloud_swap_profile: fzf-pick and activate a saved gcloud CLI configuration
 gcloud_swap_profile() {
   local current_profile
   current_profile=$(gcloud config configurations list --filter="is_active=true" --format="value(name)" 2>/dev/null)
 
-  # List all profiles, marking the active one, then fzf select
+  # Build a rich display: name | account | project | (active)
   local selected_profile
   selected_profile=$(
-    gcloud config configurations list --format="value(name,is_active)" | \
-    awk '{printf "%s%s\n", $1, ($2=="True" ? "  (active)" : "")}' | \
-    fzf --height 40% --prompt="Select profile: " --ansi | \
+    gcloud config configurations list \
+      --format="table[no-heading](name,properties.core.account,properties.core.project,is_active)" 2>/dev/null | \
+    awk '{
+      marker = ($4 == "True") ? "  (active)" : ""
+      printf "%-30s %-40s %-30s%s\n", $1, $2, $3, marker
+    }' | \
+    fzf --height 40% \
+        --prompt="Select profile: " \
+        --ansi \
+        --header="NAME                           ACCOUNT                                  PROJECT" | \
     awk '{print $1}'
   )
 
@@ -19,3 +28,6 @@ gcloud_swap_profile() {
   gcloud config configurations activate "$selected_profile"
   echo "Switched to profile '$selected_profile' (was: ${current_profile:-unknown})"
 }
+
+# Autoload delegation — run the real implementation on first call
+gcloud_swap_profile "$@"

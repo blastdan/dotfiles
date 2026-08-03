@@ -1,0 +1,164 @@
+#!/bin/zsh
+# gcloud_swap_org: manage saved GCP orgs and set the active org for the session
+gcloud_swap_org() {
+  local org_file="${HOME}/.config/gcloud/active_org"
+  local subcommand="${1:-}"
+
+  # ── Helpers ──────────────────────────────────────────────────────────────
+
+  _gcloud_swap_org_ensure_file() {
+    [[ -f "$org_file" ]] || touch "$org_file"
+  }
+
+  _gcloud_swap_org_list_saved() {
+    _gcloud_swap_org_ensure_file
+    if [[ ! -s "$org_file" ]]; then
+      echo "No orgs saved. Run: gcloud_swap_org add" >&2
+      return 1
+    fi
+    cat "$org_file"
+  }
+
+  # ── Subcommands ───────────────────────────────────────────────────────────
+
+  case "$subcommand" in
+
+    add)
+      # Fetch live orgs from GCP, fzf-pick, append to file
+      local live_orgs
+      live_orgs=$(
+        gcloud organizations list \
+          --format="value(name,displayName)" 2>/dev/null | \
+        awk '{id=$1; sub("organizations/","",id); $1=""; printf "%s:%s\n", id, substr($0,2)}'
+      )
+
+      if [[ -z "$live_orgs" ]]; then
+        echo "No organizations found. Ensure you have resourcemanager.organizations.get permission." >&2
+        return 1
+      fi
+
+      local selected
+      selected=$(
+        echo "$live_orgs" | \
+        awk -F: '{printf "%-25s %s\n", $1, $2}' | \
+        fzf --height 40% \
+            --prompt="Add org: " \
+            --ansi \
+            --header="ORG_ID                    DISPLAY_NAME"
+      )
+
+      if [[ -z "$selected" ]]; then
+        echo "No org selected. Canceled." >&2
+        return 1
+      fi
+
+      local org_id display_name
+      org_id=$(echo "$selected" | awk '{print $1}')
+      display_name=$(echo "$selected" | awk '{$1=""; print substr($0,2)}')
+
+      _gcloud_swap_org_ensure_file
+
+      # Avoid duplicates
+      if grep -q "^${org_id}:" "$org_file" 2>/dev/null; then
+        echo "Org '${org_id}' (${display_name}) is already saved." >&2
+        return 0
+      fi
+
+      echo "${org_id}:${display_name}" >> "$org_file"
+      echo "Saved org '${display_name}' (${org_id})"
+      ;;
+
+    remove)
+      _gcloud_swap_org_list_saved || return 1
+
+      local selected
+      selected=$(
+        cat "$org_file" | \
+        awk -F: '{printf "%-25s %s\n", $1, $2}' | \
+        fzf --height 40% \
+            --prompt="Remove org: " \
+            --ansi \
+            --header="ORG_ID                    DISPLAY_NAME"
+      )
+
+      if [[ -z "$selected" ]]; then
+        echo "No org selected. Canceled." >&2
+        return 1
+      fi
+
+      local org_id
+      org_id=$(echo "$selected" | awk '{print $1}')
+
+      # Remove matching line
+      local tmp
+      tmp=$(mktemp)
+      grep -v "^${org_id}:" "$org_file" > "$tmp" && mv "$tmp" "$org_file"
+      echo "Removed org '${org_id}'"
+
+      # Clear session var if it was the active one
+      if [[ "$GCP_ORG_ID" == "$org_id" ]]; then
+        unset GCP_ORG_ID
+        echo "Cleared GCP_ORG_ID from session."
+      fi
+      ;;
+
+    list)
+      _gcloud_swap_org_list_saved || return 1
+      echo ""
+      echo "Saved orgs (${org_file}):"
+      awk -F: '{printf "  %-25s %s\n", $1, $2}' "$org_file"
+      echo ""
+      if [[ -n "$GCP_ORG_ID" ]]; then
+        echo "Active session org: $GCP_ORG_ID"
+      else
+        echo "No org active in current session."
+      fi
+      ;;
+
+    clear)
+      if [[ -z "$GCP_ORG_ID" ]]; then
+        echo "GCP_ORG_ID is not set." >&2
+        return 0
+      fi
+      local prev="$GCP_ORG_ID"
+      unset GCP_ORG_ID
+      echo "Cleared GCP_ORG_ID (was: ${prev})"
+      ;;
+
+    "")
+      # Default: pick from saved orgs → export GCP_ORG_ID
+      _gcloud_swap_org_list_saved || return 1
+
+      local selected
+      selected=$(
+        cat "$org_file" | \
+        awk -F: '{printf "%-25s %s\n", $1, $2}' | \
+        fzf --height 40% \
+            --prompt="Select org: " \
+            --ansi \
+            --header="ORG_ID                    DISPLAY_NAME"
+      )
+
+      if [[ -z "$selected" ]]; then
+        echo "No org selected. Canceled." >&2
+        return 1
+      fi
+
+      local org_id display_name
+      org_id=$(echo "$selected" | awk '{print $1}')
+      display_name=$(echo "$selected" | awk '{$1=""; print substr($0,2)}')
+
+      export GCP_ORG_ID="$org_id"
+      echo "GCP_ORG_ID set to '${org_id}' (${display_name})"
+      echo "gcloud_swap_project will now filter to this org."
+      ;;
+
+    *)
+      echo "Usage: gcloud_swap_org [add|remove|list|clear]" >&2
+      return 1
+      ;;
+  esac
+}
+
+# Autoload delegation — run the real implementation on first call
+gcloud_swap_org "$@"
