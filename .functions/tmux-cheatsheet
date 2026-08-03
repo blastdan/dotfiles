@@ -1,0 +1,220 @@
+#!/bin/zsh
+# tmux-cheatsheet: searchable keybind + command picker
+# Enter  → sends shell command to pane (no Enter, so you can edit args first)
+# Keybinds are display-only
+# Bind: Ctrl-a ?
+
+target_pane="$1"
+
+# Raw entries: TYPE \t KEY/CMD \t CATEGORY \t DESCRIPTION
+raw_entries=(
+  # ── Prefix ────────────────────────────────────────────────────────────────
+  "bind	Ctrl-a C-a	Prefix	Forward Ctrl-a to the inner program (e.g. shell, vim)"
+  "bind	Ctrl-a r	Prefix	Reload tmux config — picks up changes without restarting"
+  "bind	Ctrl-a ?	Prefix	Open this cheatsheet"
+
+  # ── Panes ─────────────────────────────────────────────────────────────────
+  "bind	Ctrl-a -	Panes	Split pane horizontally — new pane opens below, inherits current path"
+  "bind	Ctrl-a \\	Panes	Split pane vertically — new pane opens to the right, inherits current path"
+  "bind	Ctrl-h	Panes	Focus pane left — works transparently inside neovim (vim-tmux-navigator)"
+  "bind	Ctrl-j	Panes	Focus pane below — works transparently inside neovim (vim-tmux-navigator)"
+  "bind	Ctrl-k	Panes	Focus pane above — works transparently inside neovim (vim-tmux-navigator)"
+  "bind	Ctrl-l	Panes	Focus pane right — works transparently inside neovim (vim-tmux-navigator)"
+  "bind	Ctrl-a H	Panes	Resize pane left by 5 columns"
+  "bind	Ctrl-a J	Panes	Resize pane down by 5 rows"
+  "bind	Ctrl-a K	Panes	Resize pane up by 5 rows"
+  "bind	Ctrl-a L	Panes	Resize pane right by 5 columns"
+  "bind	Ctrl-a f	Panes	Toggle fullscreen zoom on current pane"
+  "bind	Ctrl-a x	Panes	Kill current pane (no confirmation)"
+  "bind	Mouse click	Panes	Click to focus a pane (mouse support is on)"
+
+  # ── Windows ───────────────────────────────────────────────────────────────
+  "bind	Ctrl-a c	Windows	New window — inherits the current pane's working directory"
+  "bind	Ctrl-a 1-9	Windows	Jump directly to window by number (windows start at 1)"
+  "bind	Ctrl-a X	Windows	Kill current window and all its panes"
+
+  # ── Sessions ──────────────────────────────────────────────────────────────
+  "bind	Ctrl-a s	Sessions	Session picker — tree view of all sessions and windows"
+  "bind	Ctrl-a N	Sessions	Create a new named session (prompts for name)"
+  "bind	Ctrl-a T	Sessions	Project sessionizer — fzf picker over git repos, opens/switches session"
+  "bind	Ctrl-a Q	Sessions	Session killer — fzf multi-select to kill one or more sessions"
+  "bind	Ctrl-a S	Sessions	tmuxinator project picker — fzf list of saved layouts to start/switch"
+
+  # ── Agent / Layout shortcuts ──────────────────────────────────────────────
+  "bind	Ctrl-a A	Layouts	Agent layout — nvim left, claude top-right, shell bottom-right. Session named <repo>_<branch>"
+  "bind	Ctrl-a G	Layouts	Review layout — lazygit left, claude right. Session named <repo>_<branch>"
+  "bind	Ctrl-a W	Layouts	Watch layout — monitor a long-running claude session. Session named <repo>_<branch>"
+
+  # ── Copy mode ─────────────────────────────────────────────────────────────
+  "bind	Ctrl-a Enter	Copy Mode	Enter vi-style copy mode — use hjkl to navigate, / to search"
+  "bind	v	Copy Mode	(in copy mode) Begin character-wise selection"
+  "bind	V	Copy Mode	(in copy mode) Select entire line"
+  "bind	Ctrl-v	Copy Mode	(in copy mode) Toggle rectangle / block selection"
+  "bind	y	Copy Mode	(in copy mode) Yank selection → copy to Windows clipboard via clip.exe"
+  "bind	Y	Copy Mode	(in copy mode) Yank entire current line to clipboard"
+  "bind	Escape	Copy Mode	(in copy mode) Cancel and exit copy mode"
+  "bind	Ctrl-a p	Copy Mode	Paste most recent tmux buffer into current pane"
+  "bind	Ctrl-a P	Copy Mode	Open buffer history picker — choose which buffer to paste"
+
+  # ── Notifications ─────────────────────────────────────────────────────────
+  "bind	Ctrl-a m	Notify	Monitor current pane — sends a Windows toast when the command finishes"
+  "bind	Ctrl-a C-m	Notify	Cancel active pane monitor"
+
+  # ── tmuxinator ────────────────────────────────────────────────────────────
+  "cmd	muxs	tmuxinator	Start or switch to a saved tmuxinator layout"
+  "cmd	muxe	tmuxinator	Edit the config file for a tmuxinator project"
+  "cmd	muxn	tmuxinator	Create a new tmuxinator project interactively"
+  "cmd	muxl	tmuxinator	List all saved tmuxinator projects"
+  "cmd	muxk	tmuxinator	Stop (kill) a running tmuxinator session"
+
+  # ── Projects & Worktrees ──────────────────────────────────────────────────
+  "cmd	proj-new / gpn	Projects	Bootstrap a new project — clone from GitHub or init a fresh repo"
+  "cmd	gwt / gwtf	Worktrees	fzf worktree picker. Opens interactive list showing branch → path. Live preview shows git log + status. Selects a worktree and switches/creates its tmux session (named <repo>_<branch>). Use --cd to just cd instead of switching sessions. Run: gwt --help"
+  "cmd	gwta <branch>	Worktrees	Add worktree for an existing branch. No tmux session by default — add --session or --layout <name> for one. Example: gwta fix/login. Run: gwta --help"
+  "cmd	gwta <branch> --new	Worktrees	Create a brand-new branch and its worktree in one step. No tmux session by default. Example: gwta feat/api --new — runs git worktree add -b feat/api, creates the directory."
+  "cmd	gwta <branch> --session	Worktrees	Add worktree + open a plain tmux session rooted at it (session named <repo>_<branch>). Example: gwta fix/login --session"
+  "cmd	gwta <branch> --layout agent	Worktrees	Add worktree + launch agent layout. Panes: nvim (left, main) | claude (top-right) | shell (bottom-right). Example: gwta feat/ui --new --layout agent"
+  "cmd	gwta <branch> --layout review	Worktrees	Add worktree + launch review layout. Panes: lazygit (left) | claude (right). Example: gwta main --layout review"
+  "cmd	gwta <branch> --layout watch	Worktrees	Add worktree + launch watch layout. Panes: claude (left) | test command (top-right) | git status (bottom-right). Example: gwta feat/big --new --layout watch"
+  "cmd	gwta --help	Worktrees	Print full gwt-add usage: all flags, layout descriptions, worktree path logic, session naming, and examples."
+  "cmd	gwtl	Worktrees	List all worktrees for the current repo with their paths and HEAD commits. Alias for: git worktree list"
+  "cmd	gwtc <url>	Worktrees	Bare-clone a GitHub repo into ~/source/repos/<org>/<repo>/ and create an initial worktree for the default branch. Org is inferred from the URL. Example: gwtc https://github.com/acme/api.git. Run: gwtc --help"
+  "cmd	gwtc --help	Worktrees	Print full gwt-clone usage: URL formats, org inference, result structure, next steps."
+  "cmd	gwti <name>	Worktrees	Init a brand-new bare repo at ~/source/repos/<org>/<name>/ with an empty initial commit and a main/ worktree ready for gwta. Example: gwti my-project acme. Run: gwti --help"
+  "cmd	gwti --help	Worktrees	Print full gwt-init usage: org inference, result structure, next steps."
+  "cmd	gwtrm <path>	Worktrees	Remove a worktree directory and deregister it from git. Example: gwtrm ~/source/repos/acme/api/fix-login — alias for: git worktree remove <path>"
+  "cmd	gwtrmf <path>	Worktrees	Force-remove a worktree even if it has uncommitted changes. Example: gwtrmf ~/source/repos/acme/api/fix-login"
+  "cmd	gwtpr	Worktrees	Prune stale worktree metadata — cleans up git's internal records for worktrees whose directories have been manually deleted. Alias for: git worktree prune"
+  "cmd	gwts	Worktrees	Raw git worktree subcommand — pass any git worktree argument directly. Example: gwts list --porcelain"
+
+  # ── Git ───────────────────────────────────────────────────────────────────
+  "cmd	gs	Git	git status"
+  "cmd	gd / gds	Git	git diff / git diff --staged"
+  "cmd	gl / gla	Git	git log (current branch / all branches, graph)"
+  "cmd	gco / gcb	Git	git checkout / git checkout -b <branch>"
+  "cmd	ga / gaa	Git	git add <file> / git add -A (all)"
+  "cmd	gc / gcm	Git	git commit / git commit -m <msg>"
+  "cmd	gca	Git	git commit --amend"
+  "cmd	gp / gpf	Git	git push / git push --force-with-lease"
+  "cmd	gpl / gf	Git	git pull / git fetch --all --prune"
+  "cmd	grb / grbi	Git	git rebase / git rebase -i"
+  "cmd	gst / gstp	Git	git stash / git stash pop"
+  "cmd	lz	Git	Open lazygit TUI"
+  "cmd	gcof	Git	fzf branch picker — preview log, enter to checkout"
+  "cmd	gadd	Git	fzf interactive git add — multi-select files with diff preview"
+  "cmd	gshow	Git	fzf commit browser — preview full diff, enter to show in bat"
+  "cmd	gstashf	Git	fzf stash browser — preview diff, enter to apply"
+
+  # ── OpenCode ──────────────────────────────────────────────────────────────
+  "cmd	oc	OpenCode	Launch opencode"
+  "cmd	ocb	OpenCode	fzf browser for active sessions — launch, archive, rename"
+  "cmd	oca	OpenCode	fzf browser for archived sessions — restore with ctrl-r"
+  "cmd	ocs	OpenCode	Search sessions by title"
+  "cmd	ocsave <title>	OpenCode	Name/rename the current session from inside OpenCode"
+  "cmd	ocr [id]	OpenCode	Rename a session by id, or pick one with fzf"
+
+  # ── Python / uv ───────────────────────────────────────────────────────────
+  "cmd	uvscripts	uv	fzf picker for [tool.uv.scripts] — enter to run, ctrl-e to edit"
+  "cmd	uvdeps	uv	fzf dep browser — enter:info ctrl-r:remove ctrl-a:add ctrl-d:add-dev"
+  "cmd	uvtools	uv	fzf installed tool browser — enter:run ctrl-r:uninstall ctrl-i:install"
+  "cmd	uvr	uv	uv run"
+  "cmd	uvs	uv	uv sync"
+  "cmd	uva / uvad	uv	uv add <pkg> / uv add --dev <pkg>"
+  "cmd	uvrm	uv	uv remove <pkg>"
+  "cmd	uvl	uv	uv lock"
+  "cmd	venv	uv	uv venv (create a virtual environment)"
+  "cmd	pip	uv	uv pip (uv's pip-compatible interface)"
+
+  # ── Shell & Navigation ────────────────────────────────────────────────────
+  "cmd	cd / z	Nav	Smart cd powered by zoxide (learns from your history)"
+  "cmd	cheat	Shell	fzf browser over every alias and function with preview"
+  "cmd	fkill	Shell	fzf process killer — fuzzy find and kill a process"
+  "cmd	mkcd <dir>	Shell	mkdir + cd in one step"
+  "cmd	y	Shell	yazi file manager — cd on exit"
+  "cmd	fman	Shell	fzf man page browser with bat preview"
+  "cmd	fenv	Shell	fzf environment variable browser"
+  "cmd	reload	Shell	Re-source ~/.zshrc"
+  "cmd	showpath	Shell	Print \$PATH one entry per line"
+
+  # ── Listing & Files ───────────────────────────────────────────────────────
+  "cmd	ls / ll / la	Files	eza: basic / long+all / long+group"
+  "cmd	l / lx	Files	eza: brief+git / full detail+git"
+  "cmd	llm	Files	eza: sort by modified time"
+  "cmd	lS	Files	eza: one file per line"
+  "cmd	lt	Files	eza: directory tree (2 levels)"
+  "cmd	cat	Files	bat (syntax-highlighted cat replacement)"
+
+  # ── Dev Utilities ─────────────────────────────────────────────────────────
+  "cmd	nv	Dev	nvim"
+  "cmd	serve	Dev	python3 -m http.server (quick local file server)"
+  "cmd	json	Dev	Pretty-print JSON (jq .)"
+  "cmd	uuid	Dev	Generate a random UUID"
+  "cmd	myip	Dev	Print your public IP address"
+  "cmd	weather	Dev	Terminal weather report (wttr.in)"
+
+  # ── Cloud / kubectl ───────────────────────────────────────────────────────
+  "cmd	aws_profile	AWS	fzf AWS profile switcher"
+  "cmd	gcloud_swap_profile	GCloud	fzf GCloud project switcher"
+  "cmd	k	kubectl	kubectl shorthand"
+  "cmd	kns <ns>	kubectl	Switch namespace in current context"
+  "cmd	kctx <ctx>	kubectl	Switch kubectl context"
+  "cmd	kgp / kgpa	kubectl	get pods / get pods --all-namespaces"
+  "cmd	kl <pod>	kubectl	kubectl logs -f (follow)"
+  "cmd	kex <pod>	kubectl	kubectl exec -it (interactive shell)"
+  "cmd	ka / krm	kubectl	kubectl apply -f / kubectl delete"
+  "cmd	kpf	kubectl	kubectl port-forward"
+  "cmd	krs	kubectl	kubectl rollout status"
+
+  # ── fzf builtins ─────────────────────────────────────────────────────────
+  "bind	Ctrl-t	fzf	Insert a file path at the cursor (fd backend, bat preview)"
+  "bind	Alt-c	fzf	cd into a directory (fd backend, eza tree preview)"
+  "bind	Ctrl-r	fzf	Search shell history — ctrl-y copies selected command"
+)
+
+# Build display records: prepend a formatted display field so --with-nth=1 renders
+# a single aligned row: KEY/CMD  CATEGORY  DESCRIPTION
+# Full record: DISPLAY \t TYPE \t KEY \t CATEGORY \t DESCRIPTION
+entries=()
+for e in "${raw_entries[@]}"; do
+  IFS=$'\t' read -r type key cat desc <<< "$e"
+  display="$(printf '%-22s  %-14s  %s' "$key" "$cat" "$desc")"
+  entries+=("${display}"$'\t'"${type}"$'\t'"${key}"$'\t'"${cat}"$'\t'"${desc}")
+done
+
+header="$(printf '%-22s  %-14s  %s' 'KEY / COMMAND' 'CATEGORY' 'DESCRIPTION')"
+
+selected=$(printf '%s\n' "${entries[@]}" \
+  | fzf \
+      --prompt="  > " \
+      --delimiter=$'\t' \
+      --with-nth=1 \
+      --nth='1,3,4,5' \
+      --header="$header" \
+      --header-first \
+      --preview='
+        type="{2}"
+        key="{3}"
+        cat="{4}"
+        desc="{5}"
+        icon="⌨  "
+        [[ "$type" == "cmd" ]] && icon="$  "
+        printf "\033[1;33m%s%s\033[0m\n\n" "$icon" "$key"
+        printf "\033[1;36mCategory:\033[0m  %s\n" "$cat"
+        printf "\033[1;36mType:\033[0m      %s\n\n" "$type"
+        printf "\033[1m%s\033[0m\n" "$desc"
+      ' \
+      --preview-window='right:40%:wrap' \
+      --height=100%)
+
+[[ -z "$selected" ]] && exit 0
+
+type=$(printf '%s' "$selected" | awk -F'\t' '{print $2}')
+cmd=$(printf '%s' "$selected" | awk -F'\t' '{print $3}')
+
+[[ "$type" == "bind" ]] && exit 0
+
+if [[ -n "$target_pane" ]]; then
+  tmux send-keys -t "$target_pane" "$cmd"
+else
+  tmux send-keys "$cmd"
+fi
