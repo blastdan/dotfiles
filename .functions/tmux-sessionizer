@@ -2,27 +2,72 @@
 # tmux-sessionizer: fzf project picker → named tmux session
 # Usage: tmux-sessionizer [path]
 # Bind: Ctrl-a T
+#
+# Understands bare repos with worktrees: lists each worktree as an individual
+# entry and names sessions "repo_branch" for easy identification.
 
-SEARCH_DIRS=(
-  "$HOME/source/repos"
-  "$HOME/source"
-  "$HOME"
-)
+REPOS_ROOT="$HOME/source/repos"
 
 if [[ $# -eq 1 ]]; then
   selected="$1"
 else
-  selected=$(find "${SEARCH_DIRS[@]}" -mindepth 1 -maxdepth 2 -type d 2>/dev/null \
+  # Collect candidates:
+  #   - Regular clones at ~/source/repos/<org>/<repo>
+  #   - Worktree directories inside bare repos
+  #   - ~/source/* and ~/* as fallback shallow dirs
+  candidates=()
+
+  for org_dir in "$REPOS_ROOT"/*/; do
+    [[ -d "$org_dir" ]] || continue
+    for repo_dir in "$org_dir"*/; do
+      [[ -d "$repo_dir" ]] || continue
+      git -C "$repo_dir" rev-parse --git-dir &>/dev/null || continue
+
+      if [[ "$(git -C "$repo_dir" rev-parse --is-bare-repository 2>/dev/null)" == "true" ]]; then
+        # Bare repo: each worktree is its own candidate
+        while IFS= read -r line; do
+          [[ "$line" == worktree\ * ]] && candidates+=("${line#worktree }")
+        done < <(git -C "$repo_dir" worktree list --porcelain 2>/dev/null)
+      else
+        candidates+=("${repo_dir%/}")
+      fi
+    done
+  done
+
+  # Shallow fallback: direct children of ~/source only. Sweeping all of $HOME
+  # buried real projects under dotfile and cache directories.
+  while IFS= read -r d; do
+    candidates+=("$d")
+  done < <(find "$HOME/source" -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
+    | grep -v "^$REPOS_ROOT$")
+
+  # Prefix each candidate with ● when a session already exists for it, ○ when not.
+  live=$(tmux list-sessions -F '#{session_name}' 2>/dev/null)
+  entries=()
+  for c in ${(u)candidates[@]}; do
+    name=$(tmux-session-name "$c")
+    if print -r -- "$live" | grep -qxF -- "$name"; then
+      entries+=("● ${c}")
+    else
+      entries+=("○ ${c}")
+    fi
+  done
+
+  selected=$(printf '%s\n' "${entries[@]}" \
+    | sort -u -k2 \
     | fzf --prompt="  Project: " \
-          --preview='eza --tree --level=2 --color=always --icons {} 2>/dev/null || ls -la {}' \
+          --preview='eza --tree --level=2 --color=always --icons {2} 2>/dev/null || ls -la {2}' \
           --preview-window=right:45%)
+  # Strip the marker back off.
+  selected="${selected#* }"
 fi
 
-[[ -z "$selected" ]] && exit 0
+[[ -z "$selected" ]] && return 0
 
-session_name=$(basename "$selected" | tr ' .:' '___')
+# ── session name ──────────────────────────────────────────────────────────────
+session_name=$(tmux-session-name "$selected")
 
-if ! tmux has-session -t "$session_name" 2>/dev/null; then
+if ! tmux has-session -t="$session_name" 2>/dev/null; then
   tmux new-session -ds "$session_name" -c "$selected"
 fi
 

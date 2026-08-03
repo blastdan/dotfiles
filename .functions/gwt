@@ -1,0 +1,141 @@
+#!/bin/zsh
+# gwt: fzf picker to switch between git worktrees and their tmux sessions (● live, ○ none)
+# ──────────────────────────────────────────────────────────────────────────────
+# gwt — fzf worktree picker
+#
+# Opens an interactive fzf list of all worktrees for the current repo.
+# Each entry shows the branch name and its directory path. A live preview
+# displays the last 10 commits and working-tree status for the highlighted
+# worktree. Selecting an entry switches your tmux client to that worktree's
+# session (creating the session first if it doesn't exist yet).
+#
+# Must be run from inside a git repo or any of its worktrees.
+#
+# USAGE
+#   gwt           — pick a worktree and switch to (or create) its tmux session
+#   gwt --cd      — pick a worktree and cd into it; no tmux interaction
+#
+# ALIASES
+#   gwtf          — shorthand for gwt
+#
+# TMUX SESSION NAMING
+#   Sessions are named  <repo>_<branch>  with spaces, dots, colons, slashes
+#   and backslashes replaced by underscores.
+#   Example: repo "myapp", branch "feature/login" → session "myapp_feature_login"
+#   If the session already exists you are switched to it; otherwise a new
+#   detached session is created first.
+#
+# RELATED
+#   gwt-add  (gwta)   — add a new worktree and open it in tmux
+#   gwtl              — list all worktrees (git worktree list)
+#   gwtrm             — remove a worktree  (git worktree remove)
+#   gwtpr             — prune stale worktree metadata
+# ──────────────────────────────────────────────────────────────────────────────
+
+# ── help ──────────────────────────────────────────────────────────────────────
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+gwt — fzf worktree picker
+
+USAGE
+  gwt           pick a worktree, switch to (or create) its tmux session
+  gwt --cd      pick a worktree and cd into it (no tmux)
+  gwt --help    show this help
+
+TMUX SESSION NAMING
+  Sessions are named <repo>_<branch>. Slashes, dots, colons → underscores.
+  Example: repo "myapp", branch "feat/login" → session "myapp_feat_login"
+  If the session already exists you are switched to it; otherwise a new
+  detached session is created in the worktree directory first.
+
+ALIASES
+  gwtf
+
+RELATED
+  gwta   add a new worktree        gwtl   list worktrees
+  gwtc   clone a repo              gwti   init a new repo
+  gwtrm  remove a worktree         gwtpr  prune stale metadata
+EOF
+  return 0
+fi
+
+cd_only=false
+[[ "${1:-}" == "--cd" ]] && cd_only=true
+
+# ── locate common git dir ─────────────────────────────────────────────────────
+git rev-parse --git-dir &>/dev/null \
+  || { echo "gwt: not inside a git repo" >&2; return 1; }
+
+repo_root=$(git rev-parse --show-toplevel 2>/dev/null \
+  || git rev-parse --git-common-dir)
+repo_root=$(realpath "$repo_root")
+repo_name=$(basename "$repo_root")
+
+# ── collect worktrees ─────────────────────────────────────────────────────────
+# git worktree list --porcelain format:
+#   worktree /path
+#   HEAD <sha>
+#   branch refs/heads/<branch>   (or 'detached')
+worktree_list=$(git worktree list --porcelain 2>/dev/null)
+
+# Build display lines: "● branch  →  /path"
+live=$(tmux list-sessions -F '#{session_name}' 2>/dev/null)
+
+_marker_for() {   # $1 = worktree path
+  local n; n=$(tmux-session-name "$1")
+  if print -r -- "$live" | grep -qxF -- "$n"; then print -r -- "●"; else print -r -- "○"; fi
+}
+
+display_lines=()
+while IFS= read -r line; do
+  if [[ "$line" == worktree\ * ]]; then
+    current_path="${line#worktree }"
+  elif [[ "$line" == branch\ * ]]; then
+    current_branch="${line#branch refs/heads/}"
+    display_lines+=("$(printf '%s %-33s  →  %s' "$(_marker_for "$current_path")" "$current_branch" "$current_path")")
+  elif [[ "$line" == "detached" ]]; then
+    display_lines+=("$(printf '%s %-33s  →  %s' "$(_marker_for "$current_path")" "(detached)" "$current_path")")
+  fi
+done <<< "$worktree_list"
+
+[[ ${#display_lines[@]} -eq 0 ]] && { echo "gwt: no worktrees found" >&2; return 1; }
+
+# ── fzf pick ──────────────────────────────────────────────────────────────────
+selected=$(printf '%s\n' "${display_lines[@]}" \
+  | fzf \
+      --prompt="  worktree: " \
+      --header='● live session   ○ no session' \
+      --header-first \
+      --preview='
+        wt_path=$(echo {} | sed "s/.*→  //")
+        echo ""
+        git -C "$wt_path" log --oneline --graph --color=always --decorate -10 2>/dev/null
+        echo ""
+        git -C "$wt_path" status --short 2>/dev/null
+      ' \
+      --preview-window=right:55% \
+      --ansi)
+
+[[ -z "$selected" ]] && return 0
+
+# Extract the path (everything after "→  "); the leading "● "/"○ " marker
+# and the branch column are irrelevant here, so ignore them.
+worktree_path=$(echo "$selected" | sed 's/.*→  //')
+
+if $cd_only; then
+  cd "$worktree_path"
+  return 0
+fi
+
+# ── tmux: switch to or create a session for this worktree ─────────────────────
+session_name=$(tmux-session-name "$worktree_path")
+
+if ! tmux has-session -t="$session_name" 2>/dev/null; then
+  tmux new-session -ds "$session_name" -c "$worktree_path"
+fi
+
+if [[ -n "$TMUX" ]]; then
+  tmux switch-client -t "$session_name" || true
+else
+  tmux attach-session -t "$session_name"
+fi
