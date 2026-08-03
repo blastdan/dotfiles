@@ -6,6 +6,14 @@
 # Understands bare repos with worktrees: lists each worktree as an individual
 # entry and names sessions "repo_branch" for easy identification.
 
+# Works in both invocation modes: autoloaded as a function, and executed
+# directly as a script (tmux run-shell / display-popup -E). In script mode
+# tmux-session-name is not autoloaded, so resolve it relative to this file.
+if ! typeset -f tmux-session-name >/dev/null 2>&1; then
+  fpath=("${${(%):-%x}:A:h}" $fpath)
+  autoload -Uz tmux-session-name
+fi
+
 REPOS_ROOT="$HOME/source/repos"
 
 if [[ $# -eq 1 ]]; then
@@ -17,10 +25,8 @@ else
   #   - ~/source/* and ~/* as fallback shallow dirs
   candidates=()
 
-  for org_dir in "$REPOS_ROOT"/*/; do
-    [[ -d "$org_dir" ]] || continue
-    for repo_dir in "$org_dir"*/; do
-      [[ -d "$repo_dir" ]] || continue
+  for org_dir in "$REPOS_ROOT"/*(/N); do
+    for repo_dir in "$org_dir"/*(/N); do
       git -C "$repo_dir" rev-parse --git-dir &>/dev/null || continue
 
       if [[ "$(git -C "$repo_dir" rev-parse --is-bare-repository 2>/dev/null)" == "true" ]]; then
