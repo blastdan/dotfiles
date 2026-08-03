@@ -42,8 +42,10 @@ else
     | grep -v "^$REPOS_ROOT$")
 
   # Prefix each candidate with ● when a session already exists for it, ○ when not.
+  local live
   live=$(tmux list-sessions -F '#{session_name}' 2>/dev/null)
   entries=()
+  local name
   for c in ${(u)candidates[@]}; do
     name=$(tmux-session-name "$c")
     if print -r -- "$live" | grep -qxF -- "$name"; then

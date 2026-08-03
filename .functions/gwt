@@ -79,22 +79,23 @@ repo_name=$(basename "$repo_root")
 worktree_list=$(git worktree list --porcelain 2>/dev/null)
 
 # Build display lines: "● branch  →  /path"
+local live
 live=$(tmux list-sessions -F '#{session_name}' 2>/dev/null)
 
-_marker_for() {   # $1 = worktree path
-  local n; n=$(tmux-session-name "$1")
-  if print -r -- "$live" | grep -qxF -- "$n"; then print -r -- "●"; else print -r -- "○"; fi
-}
-
 display_lines=()
+local _n _mark
 while IFS= read -r line; do
   if [[ "$line" == worktree\ * ]]; then
     current_path="${line#worktree }"
   elif [[ "$line" == branch\ * ]]; then
     current_branch="${line#branch refs/heads/}"
-    display_lines+=("$(printf '%s %-33s  →  %s' "$(_marker_for "$current_path")" "$current_branch" "$current_path")")
+    _n=$(tmux-session-name "$current_path")
+    if print -r -- "$live" | grep -qxF -- "$_n"; then _mark="●"; else _mark="○"; fi
+    display_lines+=("$(printf '%s %-33s  →  %s' "$_mark" "$current_branch" "$current_path")")
   elif [[ "$line" == "detached" ]]; then
-    display_lines+=("$(printf '%s %-33s  →  %s' "$(_marker_for "$current_path")" "(detached)" "$current_path")")
+    _n=$(tmux-session-name "$current_path")
+    if print -r -- "$live" | grep -qxF -- "$_n"; then _mark="●"; else _mark="○"; fi
+    display_lines+=("$(printf '%s %-33s  →  %s' "$_mark" "(detached)" "$current_path")")
   fi
 done <<< "$worktree_list"
 
