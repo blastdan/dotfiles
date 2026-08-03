@@ -1,0 +1,63 @@
+#!/bin/zsh
+# tmux-session-name: resolve a directory to its tmux session name (repo_branch)
+#
+# USAGE
+#   tmux-session-name <dir>
+#
+# NAMING
+#   bare repo dir       → <repo>
+#   worktree or clone   → <repo>_<branch>   (branch from git, not the path)
+#   detached HEAD       → <repo>_<short-sha>
+#   non-git directory   → <basename>
+#   Characters  space . : / \  are replaced with _
+#
+# Derives the branch from git rather than the directory path, because a branch
+# like "feat/login" is checked out at <repo>/feat/login — path arithmetic would
+# yield "feat_login" instead of "<repo>_feat_login".
+
+local dir="${1:-}"
+if [[ -z "$dir" ]]; then
+  print -u2 -- "tmux-session-name: usage: tmux-session-name <dir>"
+  return 1
+fi
+if [[ ! -d "$dir" ]]; then
+  print -u2 -- "tmux-session-name: not a directory: $dir"
+  return 1
+fi
+
+local _sanitize='s/[ .:\/\\]/_/g'
+
+# Non-git directory → basename
+local common
+if ! common=$(git -C "$dir" rev-parse --git-common-dir 2>/dev/null); then
+  print -r -- "${dir:t}" | sed "$_sanitize"
+  return 0
+fi
+
+# Make the common dir absolute, then derive the repo name from it.
+[[ "$common" != /* ]] && common="$dir/$common"
+common="${common:A}"
+local repo
+if [[ "${common:t}" == ".git" ]]; then
+  repo="${${common:h}:t}"      # regular clone: .../repo/.git → repo
+else
+  repo="${common:t}"           # bare repo:    .../repo      → repo
+fi
+repo="${repo%.git}"
+
+# Bare repo directory itself has no meaningful branch.
+if [[ "$(git -C "$dir" rev-parse --is-bare-repository 2>/dev/null)" == "true" ]]; then
+  print -r -- "$repo" | sed "$_sanitize"
+  return 0
+fi
+
+local branch
+branch=$(git -C "$dir" branch --show-current 2>/dev/null)
+[[ -z "$branch" ]] && branch=$(git -C "$dir" rev-parse --short HEAD 2>/dev/null)
+
+if [[ -z "$branch" ]]; then
+  print -r -- "$repo" | sed "$_sanitize"
+else
+  print -r -- "${repo}_${branch}" | sed "$_sanitize"
+fi
+return 0
