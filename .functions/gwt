@@ -135,7 +135,7 @@ if ! tmux has-session -t="$session_name" 2>/dev/null; then
 fi
 
 if [[ -n "$TMUX" ]]; then
-  tmux switch-client -t "$session_name" || true
+  tmux switch-client -t="$session_name" || true
 else
-  tmux attach-session -t "$session_name"
+  tmux attach-session -t="$session_name"
 fi
