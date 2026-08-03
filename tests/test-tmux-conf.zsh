@@ -3,9 +3,19 @@ source "${0:A:h}/_harness.zsh"
 
 conf="$HOME/.config/tmux/tmux.conf"
 
-# No key may be bound twice in the file — this class of bug has occurred twice.
-dupes=$(grep -oP '^bind(-key)? (-n )?\K\S+' "$conf" | grep -v '^-' | sort | uniq -d)
-assert_eq "" "$dupes" "no duplicate bind targets in tmux.conf"
+# No key may be bound twice within the same key table — this class of bug has occurred
+# twice. Table-aware: groups by (table, key) so `v` can legitimately exist in both
+# `prefix` and `copy-mode-vi` without a false positive, but two binds of the same key
+# in the SAME table (e.g. two `prefix K`, or two `copy-mode-vi v`) are caught.
+dupes=$(perl -ne '
+  if (/^bind(?:-key)?\s+(-n\s+|-T\s+(\S+)\s+)?(\S+)/) {
+    my ($flag, $table, $key) = ($1, $2, $3);
+    if (defined $flag && $flag =~ /^-n/) { $table = "root"; }
+    elsif (!defined $table) { $table = "prefix"; }
+    print "$table $key\n";
+  }
+' "$conf" | sort | uniq -d)
+assert_eq "" "$dupes" "no duplicate bind targets within any key table in tmux.conf"
 
 # Layout binds must route through tmux-layout, never bare tmuxinator.
 assert_fail "no bare 'tmuxinator start' bind remains" -- \

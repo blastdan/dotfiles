@@ -206,12 +206,12 @@ selected=$(printf '%s\n' "${entries[@]}" \
       --preview-window='right:40%:wrap' \
       --height=100%)
 
-[[ -z "$selected" ]] && exit 0
+[[ -z "$selected" ]] && return 0
 
 type=$(printf '%s' "$selected" | awk -F'\t' '{print $2}')
 cmd=$(printf '%s' "$selected" | awk -F'\t' '{print $3}')
 
-[[ "$type" == "bind" ]] && exit 0
+[[ "$type" == "bind" ]] && return 0
 
 if [[ -n "$target_pane" ]]; then
   tmux send-keys -t "$target_pane" "$cmd"
