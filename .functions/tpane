@@ -1,0 +1,114 @@
+#!/bin/zsh
+# tpane: read from and write to other tmux panes (for Claude and for humans)
+#
+# USAGE
+#   tpane list                            list every pane: id, location, cmd, path
+#   tpane read <target> [--lines N]       print the pane's output (default 100)
+#   tpane read <target> --all             print the full scrollback
+#   tpane write <target> <text>           type text into the pane, then Enter
+#   tpane write <target> --no-enter <text>  type without pressing Enter
+#   tpane key <target> <key>              send a key, e.g. C-c, Escape, Up
+#
+# TARGET
+#   Anything tmux accepts: a pane id like %5, or session:window.pane like
+#   agent:main.2. Run `tpane list` to see both forms.
+#
+# SAFETY
+#   write and key refuse to target the calling pane ($TMUX_PANE), so an agent
+#   cannot feed its own output back into itself.
+
+local sub="${1:-}"
+[[ -n "$sub" ]] && shift
+
+# Resolve a target to exactly one pane id, or fail.
+_tpane_resolve() {
+  local t="$1" id
+  [[ -z "$t" ]] && { print -u2 -- "tpane: missing <target>"; return 1 }
+  id=$(tmux display-message -p -t "$t" '#{pane_id}' 2>/dev/null)
+  if [[ -z "$id" ]]; then
+    print -u2 -- "tpane: no such pane: $t  (run 'tpane list')"
+    return 1
+  fi
+  print -r -- "$id"
+}
+
+case "$sub" in
+  list)
+    tmux list-panes -a -F \
+      '#{pane_id}	#{session_name}:#{window_index}.#{pane_index}	#{pane_current_command}	#{pane_current_path}' \
+      2>/dev/null \
+      || { print -u2 -- "tpane: no tmux server"; return 1 }
+    ;;
+
+  read)
+    local target="${1:-}"; shift 2>/dev/null || true
+    local lines=100 all=false
+    while (( $# )); do
+      case "$1" in
+        --lines) shift; lines="${1:-100}" ;;
+        --all)   all=true ;;
+        *)       print -u2 -- "tpane read: unknown option '$1'"; return 1 ;;
+      esac
+      shift 2>/dev/null || break
+    done
+    local id; id=$(_tpane_resolve "$target") || return 1
+    if $all; then
+      tmux capture-pane -p -t "$id" -S - \
+        | awk 'BEGIN{blank=0} {if($0==""){blank++} else {for(;blank>0;blank--) print ""; print}}'
+    else
+      tmux capture-pane -p -t "$id" -S - \
+        | awk 'BEGIN{blank=0} {if($0==""){blank++} else {for(;blank>0;blank--) print ""; print}}' \
+        | tail -n "$lines"
+    fi
+    ;;
+
+  write)
+    local target="${1:-}"; shift 2>/dev/null || true
+    local press_enter=true
+    [[ "${1:-}" == "--no-enter" ]] && { press_enter=false; shift; }
+    local text="${1:-}"
+    if [[ -z "$text" ]]; then
+      print -u2 -- "tpane write: missing <text>"
+      return 1
+    fi
+    local id; id=$(_tpane_resolve "$target") || return 1
+    if [[ -n "$TMUX_PANE" && "$id" == "$TMUX_PANE" ]]; then
+      print -u2 -- "tpane: refusing to write to the calling pane ($id)"
+      return 1
+    fi
+    tmux send-keys -t "$id" -l -- "$text" || return 1
+    $press_enter && tmux send-keys -t "$id" Enter
+    return 0
+    ;;
+
+  key)
+    local target="${1:-}" key="${2:-}"
+    if [[ -z "$key" ]]; then
+      print -u2 -- "tpane key: usage: tpane key <target> <key>"
+      return 1
+    fi
+    local id; id=$(_tpane_resolve "$target") || return 1
+    if [[ -n "$TMUX_PANE" && "$id" == "$TMUX_PANE" ]]; then
+      print -u2 -- "tpane: refusing to send keys to the calling pane ($id)"
+      return 1
+    fi
+    tmux send-keys -t "$id" "$key"
+    ;;
+
+  -h|--help|help)
+    print -r -- "tpane — read/write other tmux panes"
+    print -r -- ""
+    print -r -- "  tpane list"
+    print -r -- "  tpane read  <target> [--lines N | --all]"
+    print -r -- "  tpane write <target> [--no-enter] <text>"
+    print -r -- "  tpane key   <target> <key>"
+    print -r -- ""
+    print -r -- "Target: %5 or agent:main.2 — see 'tpane list'."
+    ;;
+
+  *)
+    print -u2 -- "tpane: unknown subcommand '${sub:-<none>}'"
+    print -u2 -- "tpane: expected one of: list read write key"
+    return 1
+    ;;
+esac
