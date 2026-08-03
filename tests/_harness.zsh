@@ -75,7 +75,17 @@ track_session() { FIXTURE_SESSIONS+=("$1") }
 cleanup_fixtures() {
   local s d
   for s in "${FIXTURE_SESSIONS[@]}"; do tmux kill-session -t="$s" 2>/dev/null; done
-  for d in "${FIXTURE_DIRS[@]}"; do rm -rf "$d" 2>/dev/null; done
+  # Sweep the whole scratch tree: fixture helpers (make_bare_repo, make_worktree)
+  # are called via $(...) so their FIXTURE_DIRS appends happen in a subshell and
+  # never reach us. Guarded so an unset or unexpected $SCRATCH can never delete
+  # outside the scratchpad.
+  if [[ -n "$SCRATCH" && "$SCRATCH" == */scratchpad/dotfiles-tests ]]; then
+    command rm -rf -- "$SCRATCH"/*(DN) 2>/dev/null
+  fi
+  # Still honor anything appended directly from the parent shell (not via $(...)).
+  for d in "${FIXTURE_DIRS[@]}"; do
+    [[ -n "$d" ]] && command rm -rf -- "$d" 2>/dev/null
+  done
   FIXTURE_SESSIONS=(); FIXTURE_DIRS=()
 }
 
