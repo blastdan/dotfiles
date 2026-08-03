@@ -38,6 +38,8 @@ assert_fail "existing worktree path rejected" -- \
   zsh -c "fpath=($HOME/.dotfiles/.functions \$fpath); autoload -Uz gwt-add; cd $bare && gwt-add solo --new"
 assert_fail "unknown layout rejected" -- \
   zsh -c "fpath=($HOME/.dotfiles/.functions \$fpath); autoload -Uz gwt-add; cd $bare && gwt-add bogus --new --layout nope"
+assert_fail "--layout with no value rejected" -- \
+  zsh -c "fpath=($HOME/.dotfiles/.functions \$fpath); autoload -Uz gwt-add; cd $bare && gwt-add zzz --new --layout"
 assert_fail "no branch argument rejected" -- \
   zsh -c "fpath=($HOME/.dotfiles/.functions \$fpath); autoload -Uz gwt-add; cd $bare && gwt-add"
 

@@ -1,7 +1,7 @@
 #!/bin/zsh
 # gwt-add: add a git worktree, optionally with a tmux session or layout
 # ──────────────────────────────────────────────────────────────────────────────
-# gwt-add — add a git worktree, optionally opening it in a tmux session or layout
+# gwt-add — add a git worktree; tmux session/layout is opt-in via flags
 #
 # Creates a new worktree for an existing or new branch, then either launches
 # a tmuxinator layout or opens a plain tmux session rooted at that worktree.
@@ -45,8 +45,8 @@
 #   gwta     — shorthand for gwt-add
 #
 # EXAMPLES
-#   gwta fix/login                        checkout existing branch, plain session
-#   gwta fix/login --new                  create branch + worktree, plain session
+#   gwta fix/login                        checkout existing branch, no tmux
+#   gwta fix/login --new                  create branch + worktree, no tmux
 #   gwta feat/api --new --layout agent    create branch + worktree + agent layout
 #   gwta main --layout review             open existing main worktree in review layout
 #
@@ -63,7 +63,7 @@ setopt LOCAL_OPTIONS PIPE_FAIL NOUNSET  # scoped to this function only
 # ── help ──────────────────────────────────────────────────────────────────────
 if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   cat <<'EOF'
-gwt-add — add a git worktree and open it in a tmux session
+gwt-add — add a git worktree; tmux session/layout is opt-in via flags
 
 USAGE
   gwt-add <branch>                    create worktree + branch only (no tmux)
@@ -100,8 +100,8 @@ ALIASES
   gwta
 
 EXAMPLES
-  gwta fix/login                        checkout existing branch, plain session
-  gwta fix/login --new                  create branch + worktree, plain session
+  gwta fix/login                        checkout existing branch, no tmux
+  gwta fix/login --new                  create branch + worktree, no tmux
   gwta feat/api --new --layout agent    create branch + worktree + agent layout
   gwta main --layout review             reopen existing main in review layout
 
@@ -131,7 +131,11 @@ while (( i <= ${#args[@]} )); do
     --agent)    layout="agent" ;;
     --layout)
       (( i++ )) || true
-      layout="${args[$i]:-none}"
+      if (( i > ${#args[@]} )); then
+        print -u2 -- "gwt-add: --layout requires a value"
+        return 1
+      fi
+      layout="${args[$i]}"
       ;;
     *)
       print -u2 -- "gwt-add: unknown option '${args[$i]}'"

@@ -26,7 +26,7 @@
 #   detached session is created first.
 #
 # RELATED
-#   gwt-add  (gwta)   — add a new worktree and open it in tmux
+#   gwt-add  (gwta)   — add a new worktree (tmux session/layout opt-in via flags)
 #   gwtl              — list all worktrees (git worktree list)
 #   gwtrm             — remove a worktree  (git worktree remove)
 #   gwtpr             — prune stale worktree metadata
