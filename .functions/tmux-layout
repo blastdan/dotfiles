@@ -1,0 +1,54 @@
+#!/bin/zsh
+# tmux-layout: start a tmuxinator layout in a correctly-named session
+#
+# USAGE
+#   tmux-layout <layout> <dir> [session-name]
+#
+# LAYOUTS   agent | review | watch   (any .config/tmuxinator/<name>.yml)
+#
+# Passes `-n <session-name>` so each directory gets its own session. Without it,
+# tmuxinator uses the layout's own `name:` field, so every worktree collides
+# into one session rooted at whichever directory ran it first.
+
+local layout="${1:-}" dir="${2:-}" name="${3:-}"
+
+if [[ -z "$layout" || -z "$dir" ]]; then
+  print -u2 -- "tmux-layout: usage: tmux-layout <layout> <dir> [session-name]"
+  return 1
+fi
+if [[ ! -d "$dir" ]]; then
+  print -u2 -- "tmux-layout: not a directory: $dir"
+  return 1
+fi
+
+local layout_file="$HOME/.config/tmuxinator/${layout}.yml"
+if [[ ! -f "$layout_file" ]]; then
+  print -u2 -- "tmux-layout: unknown layout '$layout' (no $layout_file)"
+  print -u2 -- "tmux-layout: available: ${$(print -l $HOME/.config/tmuxinator/*.yml(:t:r) 2>/dev/null)//$'\n'/ }"
+  return 1
+fi
+
+local tmuxinator_bin
+tmuxinator_bin=$(command -v tmuxinator) || {
+  print -u2 -- "tmux-layout: tmuxinator not found on PATH"
+  return 1
+}
+
+[[ -z "$name" ]] && name=$(tmux-session-name "$dir") || true
+if [[ -z "$name" ]]; then
+  print -u2 -- "tmux-layout: could not derive a session name for $dir"
+  return 1
+fi
+
+# Create only if absent. -t= forces an exact match (bare -t is a prefix match).
+if ! tmux has-session -t="$name" 2>/dev/null; then
+  ( cd "$dir" && "$tmuxinator_bin" start "$layout" -n "$name" --no-attach ) \
+    >/dev/null 2>&1 \
+    || { print -u2 -- "tmux-layout: tmuxinator failed to start '$layout'"; return 1; }
+fi
+
+if [[ -n "$TMUX" ]]; then
+  tmux switch-client -t="$name"
+else
+  tmux attach-session -t="$name"
+fi

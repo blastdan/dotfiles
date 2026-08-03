@@ -1,0 +1,12 @@
+# watch: claude (left, main) | test command (top-right) | git status (bottom-right)
+# The test pane runs $WATCH_TEST_CMD when set, otherwise a plain shell.
+name: watch
+root: <%= ENV['PWD'] %>
+
+windows:
+  - main:
+      layout: main-vertical
+      panes:
+        - claude
+        - <%= ENV['WATCH_TEST_CMD'] %>
+        - watch -n 5 'git status -sb'

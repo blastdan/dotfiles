@@ -1,0 +1,12 @@
+# agent: nvim (left, main) | claude (top-right) | shell (bottom-right)
+# Session name is supplied by `tmux-layout` via `tmuxinator start agent -n <name>`.
+name: agent
+root: <%= ENV['PWD'] %>
+
+windows:
+  - main:
+      layout: main-vertical
+      panes:
+        - nvim
+        - claude
+        -

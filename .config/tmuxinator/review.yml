@@ -1,0 +1,10 @@
+# review: lazygit (left) | claude (right)
+name: review
+root: <%= ENV['PWD'] %>
+
+windows:
+  - main:
+      layout: even-horizontal
+      panes:
+        - lazygit
+        - claude
