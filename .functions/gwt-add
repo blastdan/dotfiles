@@ -1,6 +1,7 @@
 #!/bin/zsh
+# gwt-add: add a git worktree, optionally with a tmux session or layout
 # ──────────────────────────────────────────────────────────────────────────────
-# gwt-add — add a git worktree and open it in a named tmux session
+# gwt-add — add a git worktree, optionally opening it in a tmux session or layout
 #
 # Creates a new worktree for an existing or new branch, then either launches
 # a tmuxinator layout or opens a plain tmux session rooted at that worktree.
