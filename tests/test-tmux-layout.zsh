@@ -43,5 +43,15 @@ tmux-layout agent "$wt_a" >/dev/null 2>&1
 after=$(tmux list-sessions -F '#{session_name}' | grep -c '^tl-repo_alpha$')
 assert_eq "$before" "$after" "re-invoke reuses existing session"
 
+# Script-mode invocation (what tmux run-shell does in Task 5). The harness
+# autoloads every function, which would mask a failure here — so run it in a
+# stripped environment with no autoload and no .zshrc.
+wt_c=$(make_worktree "$bare" gamma)
+track_session "tl-repo_gamma"
+env -i HOME="$HOME" PATH="$PATH" TMUX="$TMUX" \
+  zsh -c "$HOME/.functions/tmux-layout agent '$wt_c'" >/dev/null 2>&1
+sleep 2
+assert_ok "script-mode invocation creates the session" -- tmux has-session -t=tl-repo_gamma
+
 cleanup_fixtures
 test_summary

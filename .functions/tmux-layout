@@ -10,6 +10,16 @@
 # tmuxinator uses the layout's own `name:` field, so every worktree collides
 # into one session rooted at whichever directory ran it first.
 
+# Works in both invocation modes: autoloaded as a function, and executed
+# directly as a script (tmux run-shell / display-popup -E). In script mode
+# tmux-session-name is not autoloaded, so resolve it relative to this file.
+# ${(%):-%x} is the currently-executing file; $0 would be the function NAME
+# when autoloaded, not a path.
+if ! typeset -f tmux-session-name >/dev/null 2>&1; then
+  fpath=("${${(%):-%x}:A:h}" $fpath)
+  autoload -Uz tmux-session-name
+fi
+
 local layout="${1:-}" dir="${2:-}" name="${3:-}"
 
 if [[ -z "$layout" || -z "$dir" ]]; then
