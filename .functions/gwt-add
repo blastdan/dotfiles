@@ -1,0 +1,217 @@
+#!/bin/zsh
+# ──────────────────────────────────────────────────────────────────────────────
+# gwt-add — add a git worktree and open it in a named tmux session
+#
+# Creates a new worktree for an existing or new branch, then either launches
+# a tmuxinator layout or opens a plain tmux session rooted at that worktree.
+#
+# Must be run from inside a git repo or any of its worktrees.
+#
+# USAGE
+#   gwt-add <branch>                       create worktree + branch only (no tmux)
+#   gwt-add <branch> --new                 create branch + worktree (no tmux)
+#   gwt-add <branch> --session             worktree + plain shell session
+#   gwt-add <branch> --layout agent        worktree + agent layout (see LAYOUTS)
+#   gwt-add <branch> --layout review       worktree + review layout
+#   gwt-add <branch> --layout watch        worktree + watch layout
+#   gwt-add <branch> --agent               shorthand for --layout agent
+#
+# ARGUMENTS
+#   <branch>          required — branch to check out or create
+#   --new             pass -b to git; creates the branch before adding the worktree
+#   --session         open a plain tmux session rooted at the worktree
+#   --layout <name>   tmuxinator layout to launch (agent | review | watch | none)
+#                      "none" is a synonym for --session
+#   --agent           alias for --layout agent (backwards-compatible shorthand)
+#
+# WORKTREE PATH
+#   Bare repo   ~/source/repos/Org/repo/          → ~/source/repos/Org/repo/<branch>/
+#   Normal repo ~/source/repos/Org/repo/           → ~/source/repos/Org/repo-<branch>/
+#   The path is derived automatically; an error is shown if it already exists.
+#
+# TMUX SESSION NAMING
+#   Sessions are named  <repo>_<branch>  with spaces, dots, colons, slashes
+#   and backslashes replaced by underscores.
+#   Example: repo "myapp", branch "feat/auth" → session "myapp_feat_auth"
+#
+# LAYOUTS
+#   agent    nvim (left) | claude (top-right) | shell (bottom-right)
+#   review   lazygit (left) | claude (right)
+#   watch    claude (left) | $WATCH_TEST_CMD (top-right) | git status (bottom-right)
+#   none     single shell pane (same as --session)
+#
+# ALIASES
+#   gwta     — shorthand for gwt-add
+#
+# EXAMPLES
+#   gwta fix/login                        checkout existing branch, plain session
+#   gwta fix/login --new                  create branch + worktree, plain session
+#   gwta feat/api --new --layout agent    create branch + worktree + agent layout
+#   gwta main --layout review             open existing main worktree in review layout
+#
+# RELATED
+#   gwt   (gwtf)   — fzf picker to switch between existing worktrees
+#   gwtl           — list all worktrees
+#   gwtrm          — remove a worktree
+#   gwt-clone      — bare-clone a repo ready for this workflow
+#   gwt-init       — initialise a brand-new repo with this layout
+# ──────────────────────────────────────────────────────────────────────────────
+
+setopt LOCAL_OPTIONS PIPE_FAIL NOUNSET  # scoped to this function only
+
+# ── help ──────────────────────────────────────────────────────────────────────
+if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
+  cat <<'EOF'
+gwt-add — add a git worktree and open it in a tmux session
+
+USAGE
+  gwt-add <branch>                    create worktree + branch only (no tmux)
+  gwt-add <branch> --new              create branch + worktree (no tmux)
+  gwt-add <branch> --session          worktree + plain shell session
+  gwt-add <branch> --layout agent     worktree + agent layout
+  gwt-add <branch> --layout review    worktree + review layout
+  gwt-add <branch> --layout watch     worktree + watch layout
+  gwt-add <branch> --agent            shorthand for --layout agent
+  gwt-add --help                      show this help
+
+ARGUMENTS
+  <branch>           required — branch to check out or create
+  --new              create the branch with -b before adding the worktree
+  --session          open a plain tmux session rooted at the worktree
+  --layout <name>    agent | review | watch | none  ("none" = --session)
+  --agent            alias for --layout agent
+
+LAYOUTS
+  agent    nvim (left) | claude (top-right) | shell (bottom-right)
+  review   lazygit (left) | claude (right)
+  watch    claude (left) | $WATCH_TEST_CMD (top-right) | git status (bottom-right)
+  none     single shell pane (same as --session)
+
+WORKTREE PATH
+  bare repo:    <repo-root>/<branch>/
+  normal repo:  <parent>/<repo-name>-<branch>/
+
+TMUX SESSION NAMING
+  Sessions are named <repo>_<branch>. Slashes, dots, colons → underscores.
+  Example: repo "myapp", branch "feat/auth" → session "myapp_feat_auth"
+
+ALIASES
+  gwta
+
+EXAMPLES
+  gwta fix/login                        checkout existing branch, plain session
+  gwta fix/login --new                  create branch + worktree, plain session
+  gwta feat/api --new --layout agent    create branch + worktree + agent layout
+  gwta main --layout review             reopen existing main in review layout
+
+RELATED
+  gwt / gwtf   worktree picker     gwtl   list worktrees
+  gwtc         clone a repo        gwti   init a new repo
+EOF
+  return 0
+fi
+
+# ── parse args ────────────────────────────────────────────────────────────────
+if [[ -z "${1:-}" ]]; then
+  print -u2 -- "gwt-add: usage: gwt-add <branch> [--new] [--session|--layout <name>]"
+  return 1
+fi
+branch="$1"
+new_branch=false
+layout=""          # empty = no tmux at all (the default)
+shift
+
+args=("$@")
+i=1
+while (( i <= ${#args[@]} )); do
+  case "${args[$i]}" in
+    --new)      new_branch=true ;;
+    --session)  layout="none" ;;
+    --agent)    layout="agent" ;;
+    --layout)
+      (( i++ )) || true
+      layout="${args[$i]:-none}"
+      ;;
+    *)
+      print -u2 -- "gwt-add: unknown option '${args[$i]}'"
+      return 1
+      ;;
+  esac
+  (( i++ )) || true
+done
+
+# Validate the layout before creating anything, so a typo doesn't leave a
+# worktree behind with no session.
+if [[ -n "$layout" && "$layout" != "none" ]]; then
+  if [[ ! -f "$HOME/.config/tmuxinator/${layout}.yml" ]]; then
+    print -u2 -- "gwt-add: unknown layout '$layout'"
+    print -u2 -- "gwt-add: available: ${$(print -l $HOME/.config/tmuxinator/*.yml(:t:r) 2>/dev/null)//$'\n'/ }"
+    return 1
+  fi
+fi
+
+# ── locate the git dir (works from a worktree or the bare repo itself) ────────
+git_dir=$(git rev-parse --git-dir 2>/dev/null) \
+  || { print -u2 -- "gwt-add: not inside a git repo"; return 1; }
+
+common_dir=$(git rev-parse --git-common-dir 2>/dev/null || echo "$git_dir")
+if [[ "$(git rev-parse --is-bare-repository 2>/dev/null)" == "true" ]]; then
+  repo_root="$common_dir"
+else
+  repo_root="$(git rev-parse --show-toplevel)"
+fi
+repo_root=$(realpath "$repo_root")
+
+# ── worktree destination ──────────────────────────────────────────────────────
+if [[ "$(git -C "$repo_root" rev-parse --is-bare-repository 2>/dev/null)" == "true" ]]; then
+  worktree_path="$repo_root/$branch"
+else
+  worktree_path="$(dirname "$repo_root")/${repo_root:t}-${branch//\//-}"
+fi
+
+if [[ -e "$worktree_path" ]]; then
+  print -u2 -- "gwt-add: worktree path already exists: $worktree_path"
+  return 1
+fi
+
+# ── create worktree ───────────────────────────────────────────────────────────
+if $new_branch; then
+  print -r -- "  Creating branch '$branch' and worktree at $worktree_path"
+  git -C "$repo_root" worktree add -b "$branch" "$worktree_path" || return 1
+else
+  print -r -- "  Adding worktree for '$branch' at $worktree_path"
+  git -C "$repo_root" worktree add "$worktree_path" "$branch" || return 1
+fi
+
+# ── env file symlinks ─────────────────────────────────────────────────────────
+for env_file in .env .env.local; do
+  [[ -f "$repo_root/$env_file" ]] || continue
+  target="$worktree_path/$env_file"
+  [[ -e "$target" ]] && continue
+  ln -sf "$repo_root/$env_file" "$target"
+  print -r -- "  Symlinked $env_file"
+done
+
+# ── tmux (opt-in) ─────────────────────────────────────────────────────────────
+if [[ -z "$layout" ]]; then
+  print -r -- "  Worktree ready: $worktree_path"
+  print -r -- "  No tmux session created. Add --session or --layout <name> for one."
+  return 0
+fi
+
+session_name=$(tmux-session-name "$worktree_path")
+
+if [[ "$layout" == "none" ]]; then
+  if ! tmux has-session -t="$session_name" 2>/dev/null; then
+    tmux new-session -ds "$session_name" -c "$worktree_path"
+  fi
+  if [[ -n "$TMUX" ]]; then
+    tmux switch-client -t="$session_name"
+  else
+    tmux attach-session -t="$session_name"
+  fi
+else
+  tmux-layout "$layout" "$worktree_path" "$session_name" || return 1
+fi
+
+print -r -- "  Session: $session_name  →  $worktree_path"
