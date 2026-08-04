@@ -231,10 +231,6 @@ Lists all gcloud configurations (marks the active one). Opens an fzf picker. Act
 
 Step-by-step wizard using fzf pickers to select project, account, and region. Prompts for a profile name, then creates and fully configures a new gcloud configuration.
 
-#### `aws_profile [profile-name]`
-
-With no argument: shows the current `$AWS_PROFILE` and opens an fzf picker from `aws configure list-profiles`. With an argument: directly sets `AWS_PROFILE`.
-
 ### Utilities
 
 #### `fkill [signal]`

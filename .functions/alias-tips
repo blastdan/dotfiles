@@ -1,0 +1,169 @@
+#!/bin/zsh
+# alias-tips: nudge toward aliases you already have but keep forgetting
+# ──────────────────────────────────────────────────────────────────────────────
+# You type `git status`; after it finishes you see:  tip: gs
+#
+# Measured motivation: `git` was typed 603 times while `gs`, `gd`, `gco` and `gp`
+# were used zero times each — 75 of 97 aliases had never been used once. The
+# aliases were fine; recall was the problem, so the fix has to arrive at the
+# moment of the miss rather than in a browser you have to remember to open.
+#
+# DESIGN
+#   * Interactive shells only. Hooks do not fire in non-interactive shells, so
+#     agent shells (Claude Code, OpenCode) and tmux popups never see a tip.
+#   * Derived from zsh's live $aliases array, never from parsing .alias/* — the
+#     map cannot drift from what is actually loaded.
+#   * A tip fires only when the alias's expansion is a TOKEN-ALIGNED PREFIX of
+#     what you typed, so the suggestion is always equivalent to your command:
+#       gs='git status'   + `git status -s`  → `gs -s`   equivalent, tip
+#       gl='git log --oneline --graph -20'   + `git log` → NOT equivalent, silent
+#     Suggesting a command that behaves differently would poison trust in all of
+#     them, so the rule errs toward silence.
+#   * Aliases whose value contains | $ ( ) & ; or backticks are skipped: prefix
+#     matching them is not reliable.
+#   * Each tip shows at most 3 times, at most once per hour, then retires for
+#     good. The goal is learning, not nagging — a tip still firing on the 40th
+#     `git status` has already failed.
+#
+# USAGE
+#   alias-tips              show pending / retired tips
+#   alias-tips --reset      re-arm every tip
+#   alias-tips --reset gs   re-arm one tip
+#   alias-tips --off        disable for this shell
+#
+# State: ${XDG_STATE_HOME:-~/.local/state}/alias-tips/seen  (name<TAB>count<TAB>epoch)
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Initialise ONCE. This whole file is the function body, so it re-runs on every
+# invocation — and `typeset -g x=""` re-assigns, which silently wiped the command
+# stashed by _preexec before _precmd could read it. (Bare `typeset -gA` preserves
+# an existing array; an explicit assignment does not.)
+if (( ! ${+_alias_tip_init} )); then
+  typeset -gA _alias_tip_map _alias_tip_seen
+  typeset -g  _alias_tip_last_cmd=""
+  typeset -g  _alias_tip_state="${XDG_STATE_HOME:-$HOME/.local/state}/alias-tips/seen"
+  typeset -gi _alias_tip_loaded=0
+  typeset -gi _alias_tip_max_shows=3
+  typeset -gi _alias_tip_min_gap=3600
+  typeset -gi _alias_tip_init=1
+fi
+
+_alias_tip_build() {
+  _alias_tip_map=()
+  local n v
+  for n v in ${(kv)aliases}; do
+    # Unreliable to prefix-match, or no keystrokes saved.
+    [[ "$v" == *[\|\$\(\)\&\;\`\<\>]* ]] && continue
+    (( ${#n} < ${#v} )) || continue
+    _alias_tip_map[$n]="$v"
+  done
+}
+
+_alias_tip_load() {
+  (( _alias_tip_loaded )) && return 0
+  _alias_tip_loaded=1
+  _alias_tip_build
+  [[ -r "$_alias_tip_state" ]] || return 0
+  local name count last
+  while IFS=$'\t' read -r name count last; do
+    [[ -n "$name" ]] && _alias_tip_seen[$name]="${count}:${last}"
+  done < "$_alias_tip_state"
+}
+
+_alias_tip_save() {
+  local dir="${_alias_tip_state:h}"
+  [[ -d "$dir" ]] || mkdir -p "$dir" 2>/dev/null || return 1
+  local name v
+  : > "$_alias_tip_state" 2>/dev/null || return 1
+  for name v in ${(kv)_alias_tip_seen}; do
+    printf '%s\t%s\t%s\n' "$name" "${v%%:*}" "${v##*:}" >> "$_alias_tip_state"
+  done
+}
+
+# Longest token-aligned prefix match. Prints the alias name, or nothing.
+_alias_tip_match() {
+  local cmd="$1" name val best="" ; local -i best_len=0
+  [[ -z "$cmd" ]] && return 1
+  # Already used an alias? Then nothing to teach.
+  [[ -n "${aliases[${cmd%% *}]}" ]] && return 1
+  for name val in ${(kv)_alias_tip_map}; do
+    [[ "$cmd" == "$val" || "$cmd" == "$val "* ]] || continue
+    (( ${#val} > best_len )) && { best="$name"; best_len=${#val} }
+  done
+  [[ -n "$best" ]] && print -r -- "$best"
+}
+
+case "${1:-}" in
+  _preexec)
+    _alias_tip_last_cmd="${2:-}"
+    return 0 ;;
+
+  _precmd)
+    local cmd="$_alias_tip_last_cmd"
+    _alias_tip_last_cmd=""
+    [[ -z "$cmd" ]] && return 0
+    _alias_tip_load
+    local hit; hit=$(_alias_tip_match "$cmd") || return 0
+    [[ -z "$hit" ]] && return 0
+
+    local -i count=0 last=0 now=$EPOCHSECONDS
+    if [[ -n "${_alias_tip_seen[$hit]}" ]]; then
+      count="${_alias_tip_seen[$hit]%%:*}"
+      last="${_alias_tip_seen[$hit]##*:}"
+    fi
+    (( count >= _alias_tip_max_shows )) && return 0        # learned; retired
+    (( now - last < _alias_tip_min_gap )) && return 0      # too soon
+
+    print -P -- "%F{yellow}tip:%f %B${hit}%b  (${_alias_tip_map[$hit]})"
+    _alias_tip_seen[$hit]="$(( count + 1 )):${now}"
+    _alias_tip_save
+    return 0 ;;
+
+  --off)
+    add-zsh-hook -d preexec _alias_tips_preexec 2>/dev/null
+    add-zsh-hook -d precmd  _alias_tips_precmd  2>/dev/null
+    print -r -- "alias-tips: disabled for this shell"
+    return 0 ;;
+
+  --reset)
+    _alias_tip_load
+    if [[ -n "${2:-}" ]]; then
+      unset "_alias_tip_seen[$2]"
+      print -r -- "alias-tips: re-armed '$2'"
+    else
+      _alias_tip_seen=()
+      print -r -- "alias-tips: re-armed all tips"
+    fi
+    _alias_tip_save
+    return 0 ;;
+
+  -h|--help)
+    print -r -- "alias-tips — nudge toward aliases you keep forgetting"
+    print -r -- ""
+    print -r -- "  alias-tips             show pending / retired tips"
+    print -r -- "  alias-tips --reset [n] re-arm all tips, or just <n>"
+    print -r -- "  alias-tips --off       disable for this shell"
+    print -r -- ""
+    print -r -- "Each tip shows at most ${_alias_tip_max_shows} times, once per hour, then retires."
+    return 0 ;;
+
+  "")
+    _alias_tip_load
+    local -i retired=0
+    print -r -- "alias-tips: ${#_alias_tip_map} aliases eligible for tips"
+    if (( ${#_alias_tip_seen} == 0 )); then
+      print -r -- "  none shown yet"
+    else
+      local name v
+      for name v in ${(kv)_alias_tip_seen}; do
+        (( ${v%%:*} >= _alias_tip_max_shows )) && (( retired++ ))
+        printf '  %-10s shown %s/%s\n' "$name" "${v%%:*}" "$_alias_tip_max_shows"
+      done
+      print -r -- "  ($retired retired)"
+    fi
+    return 0 ;;
+
+  *)
+    print -u2 -- "alias-tips: unknown option '$1'"
+    return 1 ;;
+esac

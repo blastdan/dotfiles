@@ -14,7 +14,10 @@ for f in test-*.zsh; do
   out=$(zsh "$f" 2>&1); rc=$?
   print -r -- "$out"
   (( rc != 0 )) && total_failed=$((total_failed+1))
-  if print -r -- "$out" | grep -qi 'SKIP'; then
+  # Match the literal skip marker a test file prints ("  SKIP — reason"), not any
+  # occurrence of the word: assertion labels legitimately contain "skips ...",
+  # and a case-insensitive search flagged a fully-passing file as skipped.
+  if print -r -- "$out" | grep -qE '^[[:space:]]*SKIP'; then
     total_skipped=$((total_skipped+1))
     skipped_files+=("$f")
   fi
