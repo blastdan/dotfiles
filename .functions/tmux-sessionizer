@@ -50,8 +50,21 @@ else
     | grep -v "^$REPOS_ROOT$")
 
   # Prefix each candidate with ● when a session already exists for it, ○ when not.
-  local live
-  live=$(tmux list-sessions -F '#{session_name}' 2>/dev/null)
+  #
+  # Match on the sessions' PATHS, gathered in one tmux call, rather than deriving
+  # each candidate's session NAME. Deriving the name costs two git invocations
+  # per candidate, which measured 1.8s across ~100 candidates — far too slow for
+  # a popup that opens on every prefix+T. Comparing paths is a single tmux call
+  # total and answers the same question: is there a session for this directory?
+  # Both lookups below use zsh builtins rather than spawning a process per
+  # candidate. With ~100 candidates, `grep` + `stat` per row cost ~200 forks and
+  # measured multiple seconds; an associative array and zstat are in-process.
+  zmodload -F zsh/stat b:zstat 2>/dev/null
+  local -A live_map
+  local lp
+  while IFS= read -r lp; do
+    [[ -n "$lp" ]] && live_map[$lp]=1
+  done < <(tmux list-sessions -F '#{session_path}' 2>/dev/null)
   entries=()
   local name
   for c in ${(u)candidates[@]}; do
@@ -60,18 +73,36 @@ else
     # stderr so it can't spray into the fzf popup, and drop the row entirely
     # rather than show a false ● (an empty name would match the single blank
     # line $live produces when no sessions exist).
-    name=$(tmux-session-name "$c" 2>/dev/null)
-    [[ -z "$name" ]] && continue
-    if print -r -- "$live" | grep -qxF -- "$name"; then
-      entries+=("● ${c}")
+    # Drop candidates whose directory is gone (git worktree list still
+    # enumerates prunable worktrees), so a stale entry can neither be selected
+    # nor show a misleading marker.
+    [[ -d "$c" ]] || continue
+    # Prefix the directory mtime so the list can be ordered most-recent-first.
+    # mtime is a `stat`, not git — deliberately cheap, because this runs every
+    # time the prefix+T popup opens. Anything git-based (last commit date, merge
+    # status) costs hundreds of ms across ~100 candidates; `gwt-tidy` does that
+    # work when explicitly asked instead. mtime is only a display-order hint,
+    # so nothing destructive depends on its accuracy.
+    local -a st
+    local mt=0
+    if zstat -A st +mtime "$c" 2>/dev/null; then mt="${st[1]}"; fi
+    if [[ -n "${live_map[$c]}" ]]; then
+      entries+=("${mt}"$'\t'"● ${c}")
     else
-      entries+=("○ ${c}")
+      entries+=("${mt}"$'\t'"○ ${c}")
     fi
   done
 
+  # Sort by mtime descending (field 1), so the most recently touched worktrees
+  # are at the top, then drop the mtime column before display. --with-nth=2..
+  # hides the marker from fzf's matching so typing a branch name still filters
+  # correctly, while {2} in the preview resolves to the path.
   selected=$(printf '%s\n' "${entries[@]}" \
-    | sort -u -k2 \
+    | sort -t$'\t' -k1,1nr -u \
+    | cut -f2- \
     | fzf --prompt="  Project: " \
+          --header='● live session   ○ none   (most recent first)' \
+          --header-first \
           --preview='eza --tree --level=2 --color=always --icons {2} 2>/dev/null || ls -la {2}' \
           --preview-window=right:45%)
   # Strip the marker back off.

@@ -31,6 +31,7 @@ alias gwtp='gwt-pull-all'                # fetch all + fast-forward every branch
 alias gwtrm='git worktree remove'        # remove a worktree directory
 alias gwtrmf='git worktree remove --force' # force-remove (unclean worktree)
 alias gwtpr='git worktree prune'         # prune stale worktree metadata
+alias gwtt='gwt-tidy'                    # review + remove merged worktrees (branches kept)
 
 # ── project commands (proj-*) ──────────────────────────────────────────────────
 alias gpn='proj-new'                     # interactive project init (clone or new)

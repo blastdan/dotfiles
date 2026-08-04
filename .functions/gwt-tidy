@@ -1,0 +1,185 @@
+#!/bin/zsh
+# gwt-tidy: review and remove merged git worktrees across all bare repos
+# ──────────────────────────────────────────────────────────────────────────────
+# Scans every bare repo under ~/source/repos, classifies each worktree via
+# gwt-classify, and removes only the ones you confirm.
+#
+# A worktree is offered for removal ONLY when it is merged into the default
+# branch, clean, fully pushed, not the default branch, and has no live tmux
+# session. Anything else is listed with its reason and is never selectable.
+#
+# Branches are never deleted — only the worktree directory. Every removal is
+# reversible with `gwt-add <branch>`.
+#
+# USAGE
+#   gwt-tidy              scan, review in fzf, confirm, remove
+#   gwt-tidy --dry-run    print what would be removed; change nothing
+#   gwt-tidy --yes        remove every removable worktree without review
+#   gwt-tidy --help
+#
+# RELATED
+#   gwt-classify   the classifier this is built on
+#   gwt            worktree picker        gwt-add   create a worktree
+# ──────────────────────────────────────────────────────────────────────────────
+
+if ! typeset -f gwt-classify >/dev/null 2>&1; then
+  fpath=("${${(%):-%x}:A:h}" $fpath)
+  autoload -Uz gwt-classify tmux-session-name
+fi
+
+local dry_run=false assume_yes=false
+while (( $# )); do
+  case "$1" in
+    --dry-run) dry_run=true ;;
+    --yes|-y)  assume_yes=true ;;
+    -h|--help)
+      print -r -- "gwt-tidy — remove merged git worktrees"
+      print -r -- ""
+      print -r -- "  gwt-tidy              scan, review, confirm, remove"
+      print -r -- "  gwt-tidy --dry-run    show what would go; change nothing"
+      print -r -- "  gwt-tidy --yes        remove all removable without review"
+      print -r -- ""
+      print -r -- "Only merged + clean + pushed worktrees with no live session"
+      print -r -- "are ever offered. Branches are never deleted."
+      return 0 ;;
+    *) print -u2 -- "gwt-tidy: unknown option '$1'"; return 1 ;;
+  esac
+  shift
+done
+
+local repos_root="$HOME/source/repos"
+if [[ ! -d "$repos_root" ]]; then
+  print -u2 -- "gwt-tidy: no such directory: $repos_root"
+  return 1
+fi
+
+# ── collect ───────────────────────────────────────────────────────────────────
+local -a repos
+local org repo
+for org in "$repos_root"/*(-/N); do
+  for repo in "$org"/*(-/N); do
+    [[ "$(git -C "$repo" rev-parse --is-bare-repository 2>/dev/null)" == "true" ]] \
+      && repos+=("$repo")
+  done
+done
+
+if (( ${#repos} == 0 )); then
+  print -u2 -- "gwt-tidy: no bare repos found under $repos_root"
+  return 1
+fi
+
+local -a removable_rows protected_rows
+local -A repo_of
+local records line p b state detail total_removable=0 total_wt=0
+
+print -r -- ""
+printf '  %-42s %s\n' "REPO" "REMOVABLE / TOTAL"
+for repo in "${repos[@]}"; do
+  records=$(gwt-classify "$repo" 2>/dev/null) || continue
+  local n_rm=0 n_all=0
+  while IFS=$'\t' read -r p b state detail; do
+    [[ -z "$p" ]] && continue
+    (( n_all++ ))
+    if [[ "$state" == removable ]]; then
+      (( n_rm++ ))
+      removable_rows+=("${p}"$'\t'"${b}"$'\t'"${detail}")
+      repo_of[$p]="$repo"
+    else
+      protected_rows+=("${p}"$'\t'"${b}"$'\t'"${state}"$'\t'"${detail}")
+    fi
+  done <<< "$records"
+  (( total_removable += n_rm )); (( total_wt += n_all ))
+  (( n_all > 0 )) && printf '  %-42s %d / %d\n' "${repo#$repos_root/}" "$n_rm" "$n_all"
+done
+
+print -r -- ""
+print -r -- "  $total_removable of $total_wt worktrees are removable."
+
+if (( total_removable == 0 )); then
+  print -r -- "  Nothing to tidy."
+  return 0
+fi
+
+# ── protected entries, shown for context, never selectable ────────────────────
+if (( ${#protected_rows} > 0 )) && ! $dry_run; then
+  print -r -- ""
+  print -r -- "  Kept (not removable):"
+  printf '%s\n' "${protected_rows[@]}" \
+    | sort -t$'\t' -k3,3 \
+    | while IFS=$'\t' read -r p b state detail; do
+        printf '    %-9s %-38s %s\n' "$state" "${b:0:36}" "$detail"
+      done
+fi
+
+if $dry_run; then
+  print -r -- ""
+  print -r -- "  Would remove:"
+  printf '%s\n' "${removable_rows[@]}" | while IFS=$'\t' read -r p b detail; do
+    printf '    %-38s %s\n' "${b:0:36}" "$p"
+  done
+  print -r -- ""
+  print -r -- "  --dry-run: nothing was changed."
+  return 0
+fi
+
+# ── review ────────────────────────────────────────────────────────────────────
+local selected
+if $assume_yes; then
+  selected=$(printf '%s\n' "${removable_rows[@]}")
+else
+  selected=$(printf '%s\n' "${removable_rows[@]}" \
+    | fzf --multi \
+          --delimiter=$'\t' --with-nth=2 \
+          --bind 'start:select-all' \
+          --header='tab toggles · all pre-selected · enter confirms · esc aborts' \
+          --header-first \
+          --prompt='  remove> ' \
+          --preview='git -C {1} log --oneline -8 2>/dev/null; echo; git -C {1} status --short 2>/dev/null' \
+          --preview-window=right:50%)
+  if [[ -z "$selected" ]]; then
+    print -r -- "  Aborted; nothing removed."
+    return 0
+  fi
+  local n_sel
+  n_sel=$(print -r -- "$selected" | grep -c .)
+  if ! gum confirm "Remove $n_sel worktree(s)? Branches are kept."; then
+    print -r -- "  Aborted; nothing removed."
+    return 0
+  fi
+fi
+
+# ── re-classify, then remove ───────────────────────────────────────────────────
+# Classification and removal are separated by however long the review took. A
+# worktree edited in that window must not be deleted on a stale verdict.
+local -A still_removable
+local r
+for r in "${(@u)${(@f)$(printf '%s\n' "${(@v)repo_of}")}}"; do
+  [[ -z "$r" ]] && continue
+  while IFS=$'\t' read -r p b state detail; do
+    [[ "$state" == removable ]] && still_removable[$p]=1
+  done <<< "$(gwt-classify "$r" 2>/dev/null)"
+done
+
+local removed=0 skipped=0 failed=0
+while IFS=$'\t' read -r p b detail; do
+  [[ -z "$p" ]] && continue
+  if [[ -z "${still_removable[$p]}" ]]; then
+    print -r -- "  skip    $b — no longer removable (changed during review)"
+    (( skipped++ )); continue
+  fi
+  if git -C "${repo_of[$p]}" worktree remove "$p" 2>/dev/null; then
+    print -r -- "  removed $b"
+    (( removed++ ))
+  else
+    print -u2 -- "  FAILED  $b — $p"
+    (( failed++ ))
+  fi
+done <<< "$selected"
+
+# Clear prunable records left by removals or by directories deleted by hand.
+for repo in "${repos[@]}"; do git -C "$repo" worktree prune 2>/dev/null; done
+
+print -r -- ""
+print -r -- "  Removed $removed, skipped $skipped, failed $failed. Branches kept."
+(( failed > 0 )) && return 1
+return 0

@@ -1,0 +1,125 @@
+#!/bin/zsh
+# gwt-classify: report whether each worktree in a repo is safe to remove
+# ──────────────────────────────────────────────────────────────────────────────
+# Emits one tab-separated record per worktree (the bare repo itself excluded):
+#
+#   <path>\t<branch>\t<state>\t<detail>
+#
+# STATES        removable  merged into the default branch, clean, fully pushed
+#               dirty      uncommitted changes present
+#               unpushed   has commits on no remote (detail = count)
+#               unmerged   clean and pushed, but not merged — unfinished work
+#               live       a tmux session for it currently exists
+#               default    holds the repo's default branch
+#               detached   detached HEAD — merge status not reliably checkable
+#               prunable   git record exists but the directory does not
+#
+# Only `removable` is safe to delete. Precedence when several apply:
+#   prunable → detached → default → dirty → unpushed → live → removable
+# The most dangerous reason is reported, so the explanation is never misleading.
+#
+# Branch names come from git, never from the directory path: worktree
+# directories and the branch checked out in them routinely disagree.
+#
+# Pure — reads git and tmux, mutates nothing.
+#
+# USAGE
+#   gwt-classify <repo-path>
+#
+# RELATED
+#   gwt-tidy   interactive cleanup built on this
+# ──────────────────────────────────────────────────────────────────────────────
+
+# Works both autoloaded and executed as a script (tmux run-shell / popups), where
+# tmux-session-name is not yet a function. ${(%):-%x} is the currently-executing
+# file; $0 would be the function NAME when autoloaded.
+if ! typeset -f tmux-session-name >/dev/null 2>&1; then
+  fpath=("${${(%):-%x}:A:h}" $fpath)
+  autoload -Uz tmux-session-name
+fi
+
+local repo="${1:-}"
+if [[ -z "$repo" ]]; then
+  print -u2 -- "gwt-classify: usage: gwt-classify <repo-path>"
+  return 1
+fi
+if ! git -C "$repo" rev-parse --git-dir &>/dev/null; then
+  print -u2 -- "gwt-classify: not a git repository: $repo"
+  return 1
+fi
+
+# The default branch. Guessing here would risk classifying it as removable, so
+# bail rather than assume.
+local def
+def=$(git -C "$repo" symbolic-ref --short HEAD 2>/dev/null)
+if [[ -z "$def" ]]; then
+  print -u2 -- "gwt-classify: cannot determine the default branch of $repo"
+  return 1
+fi
+
+# Computed ONCE per repo, then used as a lookup. Calling `git branch --merged`
+# per worktree is what made an earlier analysis of 32 worktrees take minutes.
+local merged_set live_set
+merged_set=$(git -C "$repo" branch --merged "$def" --format='%(refname:short)' 2>/dev/null)
+live_set=$(tmux list-sessions -F '#{session_name}' 2>/dev/null)
+
+local cur_path="" cur_branch="" cur_flag=""
+local -a paths branches flags
+
+_emit_record() {
+  [[ -z "$cur_path" ]] && return 0
+  paths+=("$cur_path"); branches+=("$cur_branch"); flags+=("$cur_flag")
+}
+
+local line
+while IFS= read -r line; do
+  case "$line" in
+    worktree\ *)
+      _emit_record
+      cur_path="${line#worktree }"; cur_branch=""; cur_flag="" ;;
+    bare)      cur_flag="bare" ;;
+    prunable*) cur_flag="prunable" ;;
+    detached)  cur_flag="detached" ;;
+    branch\ *) cur_branch="${${line#branch }#refs/heads/}" ;;
+  esac
+done < <(git -C "$repo" worktree list --porcelain 2>/dev/null)
+_emit_record
+unfunction _emit_record
+
+local i p b f state detail n sess
+for i in {1..${#paths}}; do
+  p="${paths[$i]}"; b="${branches[$i]}"; f="${flags[$i]}"
+  [[ "$f" == bare ]] && continue
+
+  state=""; detail=""
+
+  if [[ "$f" == prunable ]]; then
+    state="prunable"; detail="directory missing"
+  elif [[ "$f" == detached || -z "$b" ]]; then
+    state="detached"; detail="no branch"
+  elif [[ "$b" == "$def" ]]; then
+    state="default"; detail="$def"
+  elif [[ -n "$(git -C "$p" status --porcelain 2>/dev/null)" ]]; then
+    state="dirty"; detail="uncommitted changes"
+  else
+    n=$(git -C "$repo" rev-list --count "$b" --not --remotes 2>/dev/null)
+    if [[ -n "$n" && "$n" != 0 ]]; then
+      state="unpushed"; detail="$n commit(s) on no remote"
+    else
+      sess=$(tmux-session-name "$p" 2>/dev/null)
+      if [[ -n "$sess" ]] && print -r -- "$live_set" | grep -qxF -- "$sess"; then
+        state="live"; detail="session $sess"
+      elif print -r -- "$merged_set" | grep -qxF -- "$b"; then
+        state="removable"; detail="merged into $def"
+      else
+        # Clean and pushed, but not merged — unfinished work. Never removable.
+        # A distinct state from `unpushed`: the work is safely on a remote, it
+        # just is not finished. Conflating the two would misreport the reason.
+        state="unmerged"; detail="not merged into $def"
+      fi
+    fi
+  fi
+
+  printf '%s\t%s\t%s\t%s\n' "$p" "$b" "$state" "$detail"
+done
+return 0

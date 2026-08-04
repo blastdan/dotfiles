@@ -70,3 +70,6 @@ AGENTS.md
 
 # Stray tmux client logs left by verification work
 tmux-client-*.log
+
+# Superpowers specs/plans: working notes, not part of the dotfiles
+docs/superpowers/
