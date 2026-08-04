@@ -22,10 +22,11 @@ assert_eq "$bare/withsess" \
 # --- --layout agent ----------------------------------------------------------
 track_session "ga-repo_lay"
 ( cd "$bare" && gwt-add lay --new --layout agent ) >/dev/null 2>&1
-sleep 2
+wait_for_session ga-repo_lay
 assert_ok "--layout agent: session created" -- tmux has-session -t=ga-repo_lay
-panes=$(tmux list-panes -t=ga-repo_lay -F '#{pane_current_command}' | tr '\n' ' ')
-assert_contains "$panes" "claude" "--layout agent: claude pane running"
+# Poll rather than sleep: the pane's current command only becomes `claude` once
+# the binary has actually started, which a fixed sleep raced.
+assert_ok "--layout agent: claude pane running" -- wait_for_pane_cmd ga-repo_lay claude
 
 # --- --layout none is a synonym for --session --------------------------------
 track_session "ga-repo_lnone"

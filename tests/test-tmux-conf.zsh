@@ -91,7 +91,9 @@ targets=(${(u)targets[@]})
 for target in "${targets[@]}"; do
   assert_ok "$target:t is executable" -- test -x "$target"
 
-  stderr_out=$(timeout 5 env -i HOME="$HOME" PATH="$PATH" TMUX="$TMUX" \
+  # TMUX_TMPDIR passed through: env -i would otherwise wipe it and point this
+  # child at the user's real tmux server.
+  stderr_out=$(timeout 5 env -i HOME="$HOME" PATH="$PATH" TMUX="$TMUX" TMUX_TMPDIR="$TMUX_TMPDIR" \
     zsh -c "$target" </dev/null 2>&1 >/dev/null)
   if print -r -- "$stderr_out" | grep -qi 'command not found'; then
     _fail "$target:t runs standalone with no 'command not found'" "stderr: $stderr_out"

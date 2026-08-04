@@ -18,14 +18,15 @@ assert_fail "no args rejected"          -- tmux-layout
 # Launch the agent layout for worktree alpha.
 track_session "tl-repo_alpha"; track_session "tl-repo_beta"
 tmux-layout agent "$wt_a" >/dev/null 2>&1
-sleep 2
+wait_for_session tl-repo_alpha
 assert_ok "session tl-repo_alpha created" -- tmux has-session -t=tl-repo_alpha
 assert_eq "$wt_a" "$(tmux display-message -p -t=tl-repo_alpha: '#{session_path}')" \
   "alpha session rooted at alpha worktree"
 
-panes=$(tmux list-panes -t=tl-repo_alpha -F '#{pane_current_command}' | tr '\n' ' ')
-assert_contains "$panes" "nvim"   "agent layout runs nvim"
-assert_contains "$panes" "claude" "agent layout runs claude"
+# Poll rather than sleep: a pane's current command only becomes nvim/claude once
+# the binary has actually started, which a fixed sleep raced.
+assert_ok "agent layout runs nvim"   -- wait_for_pane_cmd tl-repo_alpha nvim
+assert_ok "agent layout runs claude" -- wait_for_pane_cmd tl-repo_alpha claude
 
 # THE REGRESSION TEST: a second worktree must get its own session, not alpha's.
 tmux-layout agent "$wt_b" >/dev/null 2>&1
@@ -48,7 +49,9 @@ assert_eq "$before" "$after" "re-invoke reuses existing session"
 # stripped environment with no autoload and no .zshrc.
 wt_c=$(make_worktree "$bare" gamma)
 track_session "tl-repo_gamma"
-env -i HOME="$HOME" PATH="$PATH" TMUX="$TMUX" \
+# TMUX_TMPDIR must be passed through: env -i wipes it, which would send this
+# child to the user's real tmux server instead of the harness's private one.
+env -i HOME="$HOME" PATH="$PATH" TMUX="$TMUX" TMUX_TMPDIR="$TMUX_TMPDIR" \
   zsh -c "$HOME/.functions/tmux-layout agent '$wt_c'" >/dev/null 2>&1
 sleep 2
 assert_ok "script-mode invocation creates the session" -- tmux has-session -t=tl-repo_gamma

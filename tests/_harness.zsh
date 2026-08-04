@@ -2,6 +2,38 @@
 # _harness.zsh: assertion helpers and git/tmux fixtures for dotfiles tests
 
 SCRATCH="/tmp/claude-1000/-home-daniel/725b72c6-4ee3-4143-bc95-1f6535996795/scratchpad/dotfiles-tests"
+
+# ── isolate tmux ──────────────────────────────────────────────────────────────
+# Tests must never touch the real tmux server. They create sessions, spawn real
+# nvim/claude/lazygit panes, and — when $TMUX is set — the functions under test
+# take their `switch-client` branch, which yanks the user's attached client into
+# a test session mid-run.
+#
+# TMUX_TMPDIR redirects tmux to a private server, and because it is exported it
+# is inherited by everything: the functions autoloaded here, and the ones run as
+# standalone scripts (tmux run-shell / display-popup targets). That matters —
+# per-call `tmux -L` would not cover the functions under test, which call `tmux`
+# directly in ~39 places.
+#
+# Unsetting TMUX/TMUX_PANE makes those functions take their `attach-session`
+# branch rather than `switch-client`, so no real client is ever redirected. The
+# attach fails harmlessly with no controlling terminal; tests assert on session
+# state, not on attach success. Tests needing a valid $TMUX_PANE (tpane's
+# self-pane guard) set it from a pane on THIS server.
+#
+# The socket dir is deliberately short and NOT under $SCRATCH: unix socket paths
+# cap around 104 chars, and $SCRATCH plus tmux's own `/tmux-<uid>/default`
+# suffix comes to ~116.
+export TMUX_TMPDIR="${TMPDIR:-/tmp}/dotfiles-test-tmux-${UID}"
+mkdir -p "$TMUX_TMPDIR"
+unset TMUX TMUX_PANE
+
+# Start the private server eagerly with a keepalive session. Several test files
+# guard themselves with `[[ -z "$TMUX" ]] && ! tmux has-session` and SKIP when no
+# server is reachable — on a freshly-isolated server that guard would fire and
+# silently skip ~34 assertions while run-all still printed "all passed".
+tmux new-session -ds _harness_keepalive -c /tmp 2>/dev/null
+
 TESTS_RUN=0
 TESTS_FAILED=0
 FIXTURE_DIRS=()
@@ -72,9 +104,42 @@ make_worktree() {
 
 track_session() { FIXTURE_SESSIONS+=("$1") }
 
+# ── waiters ───────────────────────────────────────────────────────────────────
+# tmuxinator spawns panes asynchronously, and a pane's current command only
+# becomes e.g. `claude` once the binary has actually started. Fixed `sleep`s
+# raced that and produced intermittent single-assertion failures. Poll instead.
+
+# wait_for_session <name> [timeout_s]
+wait_for_session() {
+  local s="$1" t="${2:-10}" i
+  for (( i = 0; i < t * 5; i++ )); do
+    tmux has-session -t="$s" 2>/dev/null && return 0
+    sleep 0.2
+  done
+  return 1
+}
+
+# wait_for_pane_cmd <session> <command> [timeout_s] — waits for any pane in the
+# session to be running <command>.
+wait_for_pane_cmd() {
+  local s="$1" want="$2" t="${3:-20}" i
+  for (( i = 0; i < t * 5; i++ )); do
+    tmux list-panes -t="$s" -F '#{pane_current_command}' 2>/dev/null \
+      | grep -qxF -- "$want" && return 0
+    sleep 0.2
+  done
+  return 1
+}
+
 cleanup_fixtures() {
   local s d
   for s in "${FIXTURE_SESSIONS[@]}"; do tmux kill-session -t="$s" 2>/dev/null; done
+  # Kill the whole private server — catches sessions no test remembered to
+  # track. Safe only because TMUX_TMPDIR points at our own socket, never the
+  # user's; guard it so a lost TMUX_TMPDIR can't kill their real server.
+  if [[ -n "$TMUX_TMPDIR" && "$TMUX_TMPDIR" == */dotfiles-test-tmux-* ]]; then
+    tmux kill-server 2>/dev/null
+  fi
   # Sweep the whole scratch tree: fixture helpers (make_bare_repo, make_worktree)
   # are called via $(...) so their FIXTURE_DIRS appends happen in a subshell and
   # never reach us. Guarded so an unset or unexpected $SCRATCH can never delete

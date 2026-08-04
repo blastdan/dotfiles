@@ -47,9 +47,20 @@ assert_eq "0" "$bare_lines" "--no-enter does not execute the command"
 assert_ok "key C-c accepted" -- tpane key "$target" C-c
 
 # --- safety: refuse to write to our own pane --------------------------------
-if [[ -n "$TMUX_PANE" ]]; then
-  assert_fail "refuses to write to its own pane" -- tpane write "$TMUX_PANE" 'loop'
-  assert_fail "refuses to send keys to its own pane" -- tpane key "$TMUX_PANE" C-c
+# The harness unsets TMUX_PANE (so nothing under test can switch-client the
+# user's real client), so point it at a pane on our own private server. This
+# makes the guard assertions unconditional — previously they were skipped
+# whenever the suite ran outside tmux, which is the normal case.
+TMUX_PANE="$target" assert_fail "refuses to write to its own pane" -- \
+  tpane write "$target" 'loop'
+TMUX_PANE="$target" assert_fail "refuses to send keys to its own pane" -- \
+  tpane key "$target" C-c
+# And the guard must NOT fire for a different pane on the same server.
+tmux split-window -t "$target" -d 2>/dev/null
+other=$(tmux list-panes -t=tp-test-$$ -F '#{pane_id}' | grep -vF "$target" | head -1)
+if [[ -n "$other" ]]; then
+  TMUX_PANE="$target" assert_ok "still writes to a DIFFERENT pane" -- \
+    tpane write "$other" 'echo ok'
 fi
 
 # --- errors ------------------------------------------------------------------
