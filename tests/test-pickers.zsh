@@ -148,5 +148,47 @@ assert_eq "" "$(cat "$ts_stderr")" "tmux-sessionizer: no stderr spray from the p
 assert_ok "tmux-sessionizer: symlinked repo directory appears as a candidate" -- \
   grep -q "symrepo" "$ts_capture"
 
+# --- picker list shape + the mtime-collision regression ----------------------
+# A `sort -u -k1,1nr` on the mtime column deduped on the KEY, silently hiding
+# distinct worktrees that happened to share an mtime. Three real worktrees in
+# one repo were created in the same second, and two of them vanished from
+# the picker. Guard both the collision and the grouped display format.
+ph="$SCRATCH/picker-home"
+pr="$ph/source/repos/porg/prepo"
+mkdir -p "$pr" "$ph/source"
+pseed="$SCRATCH/picker-seed"; mkdir -p "$pseed"
+git -C "$pseed" init -q -b main
+git -C "$pseed" -c user.email=t@t -c user.name=t commit -q --allow-empty -m base
+git clone -q --bare "$pseed" "$pr"
+git -C "$pr" symbolic-ref HEAD refs/heads/main
+for b in coll-a coll-b coll-c; do
+  git -C "$pr" worktree add -q -b "$b" "$pr/$b" main 2>/dev/null
+done
+# Force all three to the exact same mtime — the condition that triggered it.
+touch -d '2026-01-01 00:00:00' "$pr/coll-a" "$pr/coll-b" "$pr/coll-c"
+
+fake_bin="$SCRATCH/picker-bin"; mkdir -p "$fake_bin"
+print -r -- '#!/bin/zsh' > "$fake_bin/fzf"
+print -r -- 'cat > "$PICKER_OUT"; exit 130' >> "$fake_bin/fzf"
+chmod +x "$fake_bin/fzf"
+
+PICKER_OUT="$SCRATCH/picker-rows.txt" \
+  HOME="$ph" PATH="$fake_bin:$PATH" zsh -c "
+    fpath=($HOME/.dotfiles/.functions \$fpath)
+    autoload -Uz tmux-sessionizer tmux-session-name
+    tmux-sessionizer
+  " >/dev/null 2>&1
+
+rows=$(cat "$SCRATCH/picker-rows.txt" 2>/dev/null)
+for b in coll-a coll-b coll-c; do
+  assert_contains "$rows" "$b" "identical-mtime worktree $b is not hidden"
+done
+
+# Display column is "<marker> <group> <name>", not a bare absolute path.
+assert_contains "$rows" "prepo" "row shows the repo group"
+first_field=$(print -r -- "$rows" | head -1 | cut -f1)
+assert_fail "display column is not a raw absolute path" -- \
+  test "${first_field:0:3}" = "○ /"
+
 cleanup_fixtures
 test_summary

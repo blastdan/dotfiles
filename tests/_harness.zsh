@@ -119,6 +119,19 @@ wait_for_session() {
   return 1
 }
 
+# wait_for_pane_text <target> <text> [timeout_s] — waits for <text> to appear in
+# the pane's visible output. Fixed sleeps raced pane rendering under load: a
+# write of 40 lines had not finished drawing when the assertion ran, which failed
+# only in full-suite runs, never in isolation.
+wait_for_pane_text() {
+  local t="$1" want="$2" to="${3:-15}" i
+  for (( i = 0; i < to * 5; i++ )); do
+    tmux capture-pane -p -t "$t" 2>/dev/null | grep -qF -- "$want" && return 0
+    sleep 0.2
+  done
+  return 1
+}
+
 # wait_for_pane_cmd <session> <command> [timeout_s] — waits for any pane in the
 # session to be running <command>.
 wait_for_pane_cmd() {

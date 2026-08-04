@@ -19,25 +19,44 @@ REPOS_ROOT="$HOME/source/repos"
 if [[ $# -eq 1 ]]; then
   selected="$1"
 else
-  # Collect candidates:
-  #   - Regular clones at ~/source/repos/<org>/<repo>
-  #   - Worktree directories inside bare repos
-  #   - ~/source/* and ~/* as fallback shallow dirs
-  candidates=()
+  # Collect candidates as (path, group, name) triples. `group` is the containing
+  # repo — for a bare repo's worktrees that is the repo itself — and `name` is
+  # the part that identifies the worktree within it. Showing a full absolute
+  # path per row made the list unreadable; grouping is what tells you what you
+  # are looking at.
+  local -a c_path c_group c_name
+  local -A seen
+  local org_dir repo_dir line wt d
+
+  _add() {  # _add <path> <group> <name>
+    [[ -z "$1" || -n "${seen[$1]}" ]] && return 0
+    seen[$1]=1
+    c_path+=("$1"); c_group+=("$2"); c_name+=("$3")
+  }
 
   # (-/N): directories only, following symlinks (matching the [[ -d ]] this
   # replaced), and empty rather than a fatal NOMATCH when nothing matches.
   for org_dir in "$REPOS_ROOT"/*(-/N); do
     for repo_dir in "$org_dir"/*(-/N); do
+      repo_dir="${repo_dir%/}"
       git -C "$repo_dir" rev-parse --git-dir &>/dev/null || continue
 
       if [[ "$(git -C "$repo_dir" rev-parse --is-bare-repository 2>/dev/null)" == "true" ]]; then
-        # Bare repo: each worktree is its own candidate
+        # Bare repo: each worktree is its own candidate, named by its path
+        # relative to the repo root — which is the branch-ish part the user
+        # recognises, and keeps nested names like feat/login intact.
         while IFS= read -r line; do
-          [[ "$line" == worktree\ * ]] && candidates+=("${line#worktree }")
+          [[ "$line" == worktree\ * ]] || continue
+          wt="${line#worktree }"
+          if [[ "$wt" == "$repo_dir" ]]; then
+            _add "$wt" "${repo_dir:t}" "(bare)"
+          else
+            _add "$wt" "${repo_dir:t}" "${wt#$repo_dir/}"
+          fi
         done < <(git -C "$repo_dir" worktree list --porcelain 2>/dev/null)
       else
-        candidates+=("${repo_dir%/}")
+        # Regular clone: grouped under its org, named by the repo.
+        _add "$repo_dir" "${org_dir:t}" "${repo_dir:t}"
       fi
     done
   done
@@ -45,9 +64,10 @@ else
   # Shallow fallback: direct children of ~/source only. Sweeping all of $HOME
   # buried real projects under dotfile and cache directories.
   while IFS= read -r d; do
-    candidates+=("$d")
+    _add "$d" "source" "${d:t}"
   done < <(find "$HOME/source" -mindepth 1 -maxdepth 1 -type d 2>/dev/null \
     | grep -v "^$REPOS_ROOT$")
+  unfunction _add
 
   # Prefix each candidate with ● when a session already exists for it, ○ when not.
   #
@@ -65,48 +85,59 @@ else
   while IFS= read -r lp; do
     [[ -n "$lp" ]] && live_map[$lp]=1
   done < <(tmux list-sessions -F '#{session_path}' 2>/dev/null)
-  entries=()
-  local name
-  for c in ${(u)candidates[@]}; do
-    # Stale/prunable worktrees (git worktree list still enumerates them even
-    # when the directory is gone) make tmux-session-name fail; suppress the
-    # stderr so it can't spray into the fzf popup, and drop the row entirely
-    # rather than show a false ● (an empty name would match the single blank
-    # line $live produces when no sessions exist).
-    # Drop candidates whose directory is gone (git worktree list still
-    # enumerates prunable worktrees), so a stale entry can neither be selected
-    # nor show a misleading marker.
-    [[ -d "$c" ]] || continue
-    # Prefix the directory mtime so the list can be ordered most-recent-first.
-    # mtime is a `stat`, not git — deliberately cheap, because this runs every
-    # time the prefix+T popup opens. Anything git-based (last commit date, merge
-    # status) costs hundreds of ms across ~100 candidates; `gwt-tidy` does that
-    # work when explicitly asked instead. mtime is only a display-order hint,
-    # so nothing destructive depends on its accuracy.
-    local -a st
-    local mt=0
-    if zstat -A st +mtime "$c" 2>/dev/null; then mt="${st[1]}"; fi
-    if [[ -n "${live_map[$c]}" ]]; then
-      entries+=("${mt}"$'\t'"● ${c}")
-    else
-      entries+=("${mt}"$'\t'"○ ${c}")
-    fi
+  # mtime orders the list. It is a zstat, not git — deliberately cheap, because
+  # this runs every time the prefix+T popup opens. Anything git-based (last
+  # commit date, merge status) costs hundreds of ms across ~100 candidates;
+  # gwt-tidy does that work when explicitly asked. mtime is only a display-order
+  # hint, so nothing destructive depends on its accuracy.
+  local -a rows
+  local -A group_recent
+  local i p g n mt
+  local -a st
+  for i in {1..${#c_path}}; do
+    p="${c_path[$i]}"; g="${c_group[$i]}"; n="${c_name[$i]}"
+    # Drop candidates whose directory is gone: git worktree list still
+    # enumerates prunable worktrees, and a stale row can neither be selected nor
+    # show a meaningful marker.
+    [[ -d "$p" ]] || continue
+    mt=0
+    if zstat -A st +mtime "$p" 2>/dev/null; then mt="${st[1]}"; fi
+    (( mt > ${group_recent[$g]:-0} )) && group_recent[$g]=$mt
+    rows+=("${g}"$'\t'"${mt}"$'\t'"${p}"$'\t'"${n}")
   done
 
-  # Sort by mtime descending (field 1), so the most recently touched worktrees
-  # are at the top, then drop the mtime column before display. --with-nth=2..
-  # hides the marker from fzf's matching so typing a branch name still filters
-  # correctly, while {2} in the preview resolves to the path.
-  selected=$(printf '%s\n' "${entries[@]}" \
-    | sort -t$'\t' -k1,1nr -u \
-    | cut -f2- \
-    | fzf --prompt="  Project: " \
-          --header='● live session   ○ none   (most recent first)' \
+  # Two-level ordering: groups ranked by their most recent activity, and within
+  # a group the worktrees by their own recency. Grouping alone would bury the
+  # repo you are actually working in; recency alone loses the grouping that
+  # makes the list legible.
+  local -a display_rows
+  local gmax marker
+  for i in {1..${#rows}}; do
+    IFS=$'\t' read -r g mt p n <<< "${rows[$i]}"
+    gmax="${group_recent[$g]:-0}"
+    if [[ -n "${live_map[$p]}" ]]; then marker="●"; else marker="○"; fi
+    # sortkey1 = group recency (desc), sortkey2 = group name (ties), sortkey3 =
+    # own recency (desc); then the display column and the path fzf acts on.
+    display_rows+=("${gmax}"$'\t'"${g}"$'\t'"${mt}"$'\t'"$(printf '%s %-26s %s' "$marker" "$g" "$n")"$'\t'"${p}")
+  done
+
+  # --with-nth=1 shows and matches only the display column, so typing filters on
+  # "repo name" without the absolute path getting in the way; {2} is the path,
+  # used by the preview and by the selection below.
+  # --height=100% overrides the --height=50% in FZF_DEFAULT_OPTS, which
+  # otherwise leaves half the popup empty.
+  selected=$(printf '%s\n' "${display_rows[@]}" \
+    | sort -t$'\t' -k1,1nr -k2,2 -k3,3nr \
+    | cut -f4- \
+    | fzf --delimiter=$'\t' --with-nth=1 \
+          --height=100% \
+          --prompt="  Project: " \
+          --header='● live   ○ none    grouped by repo, most active first' \
           --header-first \
           --preview='eza --tree --level=2 --color=always --icons {2} 2>/dev/null || ls -la {2}' \
           --preview-window=right:45%)
-  # Strip the marker back off.
-  selected="${selected#* }"
+  # Recover the path from the selected row.
+  selected="${${(@s:	:)selected}[2]}"
 fi
 
 [[ -z "$selected" ]] && return 0

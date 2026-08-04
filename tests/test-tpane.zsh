@@ -25,7 +25,10 @@ assert_contains "$out" "tpane_roundtrip_marker" "write then read round-trips"
 
 # --- --lines is honoured -----------------------------------------------------
 tpane write "$target" 'for i in $(seq 1 40); do echo line_$i; done'
-sleep 2
+# Poll for the last line rather than sleeping: under full-suite load the 40-line
+# write had not finished drawing when the assertion ran, so this failed only in
+# combined runs and never in isolation.
+wait_for_pane_text "$target" "line_40"
 out=$(tpane read "$target" --lines 5)
 assert_eq "5" "$(print -r -- "$out" | wc -l | tr -d ' ')" "--lines 5 returns 5 lines"
 
