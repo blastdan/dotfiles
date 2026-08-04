@@ -25,8 +25,10 @@ else
   #   - ~/source/* and ~/* as fallback shallow dirs
   candidates=()
 
-  for org_dir in "$REPOS_ROOT"/*(/N); do
-    for repo_dir in "$org_dir"/*(/N); do
+  # (-/N): directories only, following symlinks (matching the [[ -d ]] this
+  # replaced), and empty rather than a fatal NOMATCH when nothing matches.
+  for org_dir in "$REPOS_ROOT"/*(-/N); do
+    for repo_dir in "$org_dir"/*(-/N); do
       git -C "$repo_dir" rev-parse --git-dir &>/dev/null || continue
 
       if [[ "$(git -C "$repo_dir" rev-parse --is-bare-repository 2>/dev/null)" == "true" ]]; then

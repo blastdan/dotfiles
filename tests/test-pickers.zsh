@@ -123,6 +123,15 @@ git clone -q --bare "$seed" "$sess_org/ts-repo" 2>/dev/null
 git -C "$sess_org/ts-repo" worktree add -q -b feature "$sess_org/ts-repo/feature" 2>/dev/null
 command rm -rf "$sess_org/ts-repo/feature"   # dir gone, "prunable" remains
 
+# A symlinked repo directory must still surface as a candidate: zsh's `/`
+# glob qualifier is lstat-based and skips symlinks, unlike the `[[ -d ]]`
+# check it replaced, so the org/repo scan must use `-/` (follow symlinks).
+sym_target="$SCRATCH/.symtarget-repo"
+mkdir -p "$sym_target"
+git -C "$sym_target" init -q -b main
+git -C "$sym_target" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
+ln -s "$sym_target" "$sess_org/symrepo"
+
 ts_capture="$SCRATCH/ts-candidates.txt"
 ts_stderr="$SCRATCH/ts-stderr.txt"
 : > "$ts_capture"
@@ -136,6 +145,8 @@ FZF_CAPTURE_FILE="$ts_capture" PATH="$fake_fzf_dir2:$PATH" \
 assert_fail "tmux-sessionizer: prunable worktree excluded from candidate list" -- \
   grep -q "feature" "$ts_capture"
 assert_eq "" "$(cat "$ts_stderr")" "tmux-sessionizer: no stderr spray from the prunable worktree"
+assert_ok "tmux-sessionizer: symlinked repo directory appears as a candidate" -- \
+  grep -q "symrepo" "$ts_capture"
 
 cleanup_fixtures
 test_summary
