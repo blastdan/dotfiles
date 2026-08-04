@@ -150,9 +150,8 @@ assert_ok "tmux-sessionizer: symlinked repo directory appears as a candidate" --
 
 # --- picker list shape + the mtime-collision regression ----------------------
 # A `sort -u -k1,1nr` on the mtime column deduped on the KEY, silently hiding
-# distinct worktrees that happened to share an mtime. Three real worktrees in
-# one repo were created in the same second, and two of them vanished from
-# the picker. Guard both the collision and the grouped display format.
+# distinct worktrees that happened to share an mtime. Three real worktrees in one
+# repo were created in the same second, and two of them vanished from the picker. Guard both the collision and the grouped display format.
 ph="$SCRATCH/picker-home"
 pr="$ph/source/repos/porg/prepo"
 mkdir -p "$pr" "$ph/source"

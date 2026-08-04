@@ -77,8 +77,8 @@ gcloud container clusters get-credentials <cluster> --region <region>
 
 | Setting | Value |
 |---------|-------|
-| SSO Session | `foci-admin` |
-| SSO Start URL | `https://<org>.awsapps.com/start` |
+| SSO Session | `<sso-session-name>` |
+| SSO Start URL | `https://<org>.awsapps.com/start`  <!-- redacted: public repo --> |
 | Secrets Project | `<gcp-secrets-project>` |
 
 ---
