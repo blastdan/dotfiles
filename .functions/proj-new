@@ -240,10 +240,44 @@ proj-new() {
     gwt-init "$repo_name" "$org" || return 1
   fi
 
-  # The worktree for $branch should now exist under $dest/$branch
-  local worktree_path="$dest/$branch"
+  # Discover the worktree that was ACTUALLY created rather than assuming
+  # "$dest/$branch". gwt-init always creates `main`, and gwt-clone checks out the
+  # repo's real default branch — neither accepts the Step-3 answer. Trusting it
+  # pointed worktree_path at a directory that was never created, and because the
+  # layout launch below swallowed the failure the wizard still printed "✓ Done".
+  local worktree_path="" actual_branch=""
+  local _p _b line
+  while IFS= read -r line; do
+    case "$line" in
+      worktree\ *) _p="${line#worktree }" ;;
+      bare)        _p="" ;;
+      branch\ *)   _b="${${line#branch }#refs/heads/}"
+                   [[ -n "$_p" && -z "$worktree_path" ]] && {
+                     worktree_path="$_p"; actual_branch="$_b"
+                   } ;;
+    esac
+  done < <(git -C "$dest" worktree list --porcelain 2>/dev/null)
+
+  if [[ -z "$worktree_path" || ! -d "$worktree_path" ]]; then
+    print -u2 -- "  proj-new: no worktree was created under $dest — aborting."
+    return 1
+  fi
+
+  # Be loud when the wizard could not give you the branch you asked for, instead
+  # of proceeding against a path that does not exist.
+  if [[ -n "$branch" && "$branch" != "$actual_branch" ]]; then
+    print -r -- ""
+    print -r -- "  Note: you asked for branch '$branch', but $mode created"
+    print -r -- "  '$actual_branch'. Continuing with '$actual_branch'."
+    print -r -- "  Add the branch you wanted with:  gwta $branch --new"
+  fi
+
   local session_name
-  session_name=$(echo "${repo_name}_${branch}" | tr ' .:/\\' '_____')
+  session_name=$(tmux-session-name "$worktree_path")
+  if [[ -z "$session_name" ]]; then
+    print -u2 -- "  proj-new: could not derive a session name for $worktree_path"
+    return 1
+  fi
 
   # Create GitHub remote if requested
   if $create_remote; then
@@ -281,7 +315,13 @@ proj-new() {
                      || tmux attach-session -t="$session_name"
   else
     echo "  Launching '$layout' layout…"
-    tmux-layout "$layout" "$worktree_path" "$session_name"
+    # Propagate the failure: without this the wizard printed "✓ Done" even when
+    # the layout never started.
+    if ! tmux-layout "$layout" "$worktree_path" "$session_name"; then
+      print -u2 -- "  proj-new: failed to launch the '$layout' layout."
+      print -u2 -- "  The worktree is ready at $worktree_path."
+      return 1
+    fi
   fi
 
   echo ""
