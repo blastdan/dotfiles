@@ -76,7 +76,21 @@ repo_name=$(basename "$repo_root")
 #   worktree /path
 #   HEAD <sha>
 #   branch refs/heads/<branch>   (or 'detached')
+#   prunable <reason>            (optional — dir is gone but git still lists it)
+# `prunable` comes AFTER branch/detached in the porcelain output, so a first
+# pass collects which paths are prunable before the display pass decides
+# whether to skip them.
 worktree_list=$(git worktree list --porcelain 2>/dev/null)
+
+local -A prunable_paths
+local _pp=""
+while IFS= read -r line; do
+  if [[ "$line" == worktree\ * ]]; then
+    _pp="${line#worktree }"
+  elif [[ "$line" == prunable\ * ]]; then
+    prunable_paths[$_pp]=1
+  fi
+done <<< "$worktree_list"
 
 # Build display lines: "● branch  →  /path"
 local live
@@ -88,12 +102,16 @@ while IFS= read -r line; do
   if [[ "$line" == worktree\ * ]]; then
     current_path="${line#worktree }"
   elif [[ "$line" == branch\ * ]]; then
+    [[ -n "${prunable_paths[$current_path]:-}" ]] && continue
     current_branch="${line#branch refs/heads/}"
-    _n=$(tmux-session-name "$current_path")
+    _n=$(tmux-session-name "$current_path" 2>/dev/null)
+    [[ -z "$_n" ]] && continue
     if print -r -- "$live" | grep -qxF -- "$_n"; then _mark="●"; else _mark="○"; fi
     display_lines+=("$(printf '%s %-33s  →  %s' "$_mark" "$current_branch" "$current_path")")
   elif [[ "$line" == "detached" ]]; then
-    _n=$(tmux-session-name "$current_path")
+    [[ -n "${prunable_paths[$current_path]:-}" ]] && continue
+    _n=$(tmux-session-name "$current_path" 2>/dev/null)
+    [[ -z "$_n" ]] && continue
     if print -r -- "$live" | grep -qxF -- "$_n"; then _mark="●"; else _mark="○"; fi
     display_lines+=("$(printf '%s %-33s  →  %s' "$_mark" "(detached)" "$current_path")")
   fi
@@ -129,7 +147,12 @@ if $cd_only; then
 fi
 
 # ── tmux: switch to or create a session for this worktree ─────────────────────
-session_name=$(tmux-session-name "$worktree_path")
+session_name=$(tmux-session-name "$worktree_path" 2>/dev/null)
+
+if [[ -z "$session_name" ]]; then
+  print -u2 -- "gwt: could not derive a session name for $worktree_path"
+  return 1
+fi
 
 if ! tmux has-session -t="$session_name" 2>/dev/null; then
   tmux new-session -ds "$session_name" -c "$worktree_path"

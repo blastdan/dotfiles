@@ -74,5 +74,68 @@ assert_ok "tmux-sessionizer delegates to tmux-session-name" -- \
 assert_fail "tmux-sessionizer no longer sweeps all of \$HOME" -- \
   grep -qE 'find "\$HOME/source" "\$HOME"' "$HOME/.dotfiles/.functions/tmux-sessionizer"
 
+# --- stale/prunable worktrees are excluded, silently, from both pickers -----
+# `git worktree list --porcelain` keeps listing a worktree whose directory
+# was deleted out from under it (reports it `prunable`), which previously
+# made tmux-session-name fail loudly (stderr spray into the fzf popup) and,
+# because its empty output could match the blank line `$live` produces with
+# no sessions running, show a false ● on an unusable row.
+real_home="$HOME"
+
+# fake fzf: dump whatever candidate list it's fed to a file, select nothing.
+fake_fzf_dir2="$SCRATCH/fake-fzf-bin2"
+mkdir -p "$fake_fzf_dir2"
+cat > "$fake_fzf_dir2/fzf" <<'FAKEFZF'
+#!/bin/zsh
+cat > "$FZF_CAPTURE_FILE"
+FAKEFZF
+chmod +x "$fake_fzf_dir2/fzf"
+
+## gwt: prunable worktree alongside a normal, still-valid one
+prune_bare=$(make_bare_repo prune-repo)
+prune_wt=$(make_worktree "$prune_bare" gone)
+make_worktree "$prune_bare" valid >/dev/null
+command rm -rf "$prune_wt"   # dir gone, git metadata (and "prunable") remains
+
+gwt_capture="$SCRATCH/gwt-candidates.txt"
+gwt_stderr="$SCRATCH/gwt-stderr.txt"
+: > "$gwt_capture"
+FZF_CAPTURE_FILE="$gwt_capture" PATH="$fake_fzf_dir2:$PATH" \
+  zsh -c "
+    fpath=('$real_home/.dotfiles/.functions' \$fpath)
+    autoload -Uz gwt tmux-session-name
+    cd '$prune_bare'
+    gwt >/dev/null 2>'$gwt_stderr'
+  "
+assert_fail "gwt: prunable worktree excluded from candidate list" -- \
+  grep -q "gone" "$gwt_capture"
+assert_eq "" "$(cat "$gwt_stderr")" "gwt: no stderr spray from the prunable worktree"
+
+## tmux-sessionizer: prunable worktree under a fake $HOME/source/repos
+sess_home="$SCRATCH/sessionizer-home"
+sess_org="$sess_home/source/repos/testorg"
+mkdir -p "$sess_org"
+seed="$SCRATCH/.seed-ts-repo"
+mkdir -p "$seed"
+git -C "$seed" init -q -b main
+git -C "$seed" -c user.email=t@t -c user.name=t commit -q --allow-empty -m init
+git clone -q --bare "$seed" "$sess_org/ts-repo" 2>/dev/null
+git -C "$sess_org/ts-repo" worktree add -q -b feature "$sess_org/ts-repo/feature" 2>/dev/null
+command rm -rf "$sess_org/ts-repo/feature"   # dir gone, "prunable" remains
+
+ts_capture="$SCRATCH/ts-candidates.txt"
+ts_stderr="$SCRATCH/ts-stderr.txt"
+: > "$ts_capture"
+FZF_CAPTURE_FILE="$ts_capture" PATH="$fake_fzf_dir2:$PATH" \
+  zsh -c "
+    fpath=('$real_home/.dotfiles/.functions' \$fpath)
+    autoload -Uz tmux-sessionizer tmux-session-name
+    export HOME='$sess_home'
+    tmux-sessionizer >/dev/null 2>'$ts_stderr'
+  "
+assert_fail "tmux-sessionizer: prunable worktree excluded from candidate list" -- \
+  grep -q "feature" "$ts_capture"
+assert_eq "" "$(cat "$ts_stderr")" "tmux-sessionizer: no stderr spray from the prunable worktree"
+
 cleanup_fixtures
 test_summary
